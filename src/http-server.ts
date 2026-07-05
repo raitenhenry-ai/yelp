@@ -3,14 +3,19 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { ToolProofDb } from './db.js';
 import { ingestOutcome } from './ingest.js';
 import { buildMcpServer } from './mcp-server.js';
-import { getFeed, getLeaderboard, getToolReport, getToolReviews } from './query.js';
+import { getDirectory, getFeed, getLeaderboard, getToolReport, getToolReviews } from './query.js';
 import { feedPageHtml } from './web/feed-page.js';
 import { landingPageHtml } from './web/landing-page.js';
+import { directoryPageHtml } from './web/directory-page.js';
+import { toolPageHtml } from './web/tool-page.js';
 
 /**
  * Minimal dependency-free HTTP surface:
  *   GET  /                      — landing page (live stats + embedded observatory)
  *   GET  /feed                  — the full human-watchable feed page
+ *   GET  /tools                 — browsable directory (q, category, page)
+ *   GET  /tool/:tool_id         — tool profile page (exists for ANY id; first review persists it)
+ *   GET  /api/directory         — directory as JSON (q, category, page, per_page)
  *   ALL  /mcp                   — remote MCP endpoint (Streamable HTTP, stateless)
  *   GET  /healthz               — liveness + headline counts
  *   GET  /api/feed              — recent reviews (limit, category)
@@ -90,6 +95,81 @@ async function route(
     return;
   }
 
+  if (req.method === 'GET' && path === '/tools') {
+    const result = getDirectory(db, {
+      q: q.get('q') ?? undefined,
+      category: q.get('category') ?? undefined,
+      page: intParam(q, 'page', 1, 100_000),
+      per_page: intParam(q, 'per_page', 30, 100),
+    });
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(
+      directoryPageHtml(
+        siteName,
+        result,
+        { q: q.get('q') ?? undefined, category: q.get('category') ?? undefined },
+        db.listCategories(),
+      ),
+    );
+    return;
+  }
+
+  if (req.method === 'GET' && path.startsWith('/tool/')) {
+    const toolId = decodeURIComponent(path.slice('/tool/'.length));
+    if (!toolId || toolId.length > 256) {
+      sendJson(res, 404, { error: 'bad tool id' });
+      return;
+    }
+    // Every conceivable tool_id has a page. Known tools render their
+    // evidence; unknown ones render an invitation — the first submitted
+    // review persists the page (ingest auto-registers unknown tools).
+    const report =
+      getToolReport(db, toolId) ??
+      ({
+        tool_id: toolId,
+        name: toolId.split(/[/#]/).pop() ?? toolId,
+        category: 'uncategorized',
+        description: '',
+        homepage: null,
+        first_seen: new Date().toISOString(),
+        score: 0.5,
+        confidence: 0,
+        rank_score: 0.5,
+        stars: 3,
+        n_outcomes: 0,
+        n_verified: 0,
+        n_reporters: 0,
+        success_rate: 0,
+        latency_p50_ms: null,
+        trend: 'insufficient' as const,
+        last_outcome_at: null,
+        top_failure_mode: null,
+        summary: '',
+        recent_reviews: [],
+        outcomes_sample: [],
+      } satisfies ReturnType<typeof getToolReport> & object);
+    const failures = new Map<string, number>();
+    for (const o of report.outcomes_sample.length
+      ? db.outcomesForTool(toolId)
+      : []) {
+      if (o.status === 'failure') {
+        const mode = o.failure_mode ?? 'other';
+        failures.set(mode, (failures.get(mode) ?? 0) + 1);
+      }
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(
+      toolPageHtml(siteName, {
+        report,
+        siblings: db.siblingTools(toolId),
+        failureBreakdown: [...failures.entries()]
+          .map(([mode, count]) => ({ mode, count }))
+          .sort((a, b) => b.count - a.count),
+      }),
+    );
+    return;
+  }
+
   if (path === '/mcp') {
     await handleMcp(db, req, res);
     return;
@@ -134,6 +214,20 @@ async function route(
     sendJson(res, 200, {
       leaderboard: getLeaderboard(db, q.get('category') ?? undefined, intParam(q, 'limit', 20, 50)),
     });
+    return;
+  }
+
+  if (req.method === 'GET' && path === '/api/directory') {
+    sendJson(
+      res,
+      200,
+      getDirectory(db, {
+        q: q.get('q') ?? undefined,
+        category: q.get('category') ?? undefined,
+        page: intParam(q, 'page', 1, 100_000),
+        per_page: intParam(q, 'per_page', 30, 100),
+      }),
+    );
     return;
   }
 

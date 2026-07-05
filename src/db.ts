@@ -88,10 +88,100 @@ export class ToolProofDb {
       .run(tool_id, name, category, new Date().toISOString());
   }
 
+  /**
+   * Register a tool from a catalog import: creates the page if new, and only
+   * fills in description/homepage/category where they're missing — an import
+   * never clobbers a curated record or a category chosen by real reviews.
+   */
+  registerImportedTool(tool: {
+    tool_id: string;
+    name: string;
+    category: string;
+    description: string;
+    homepage?: string | null;
+  }): boolean {
+    const existing = this.getTool(tool.tool_id);
+    if (!existing) {
+      this.upsertTool({ ...tool, homepage: tool.homepage ?? null });
+      return true;
+    }
+    this.db
+      .prepare(
+        `UPDATE tools SET
+           description = CASE WHEN description = '' THEN ? ELSE description END,
+           homepage    = COALESCE(homepage, ?),
+           category    = CASE WHEN category = 'uncategorized' THEN ? ELSE category END
+         WHERE tool_id = ?`,
+      )
+      .run(tool.description, tool.homepage ?? null, tool.category, tool.tool_id);
+    return false;
+  }
+
   getTool(tool_id: string): ToolRecord | null {
     return (this.db.prepare('SELECT * FROM tools WHERE tool_id = ?').get(tool_id) ?? null) as
       | ToolRecord
       | null;
+  }
+
+  /** Directory search: name/description/id match + category filter, reviewed tools first. */
+  searchTools(params: {
+    q?: string;
+    category?: string;
+    limit?: number;
+    offset?: number;
+  }): (ToolRecord & { n_outcomes: number })[] {
+    const { where, args } = toolFilter(params);
+    const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+    const offset = Math.max(params.offset ?? 0, 0);
+    return this.db
+      .prepare(
+        `SELECT t.*, COALESCE(c.n, 0) AS n_outcomes
+         FROM tools t
+         LEFT JOIN (SELECT tool_id, COUNT(*) AS n FROM outcomes GROUP BY tool_id) c
+           ON c.tool_id = t.tool_id
+         ${where}
+         ORDER BY n_outcomes DESC, t.name COLLATE NOCASE ASC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(...args, limit, offset) as unknown as (ToolRecord & { n_outcomes: number })[];
+  }
+
+  countTools(params: { q?: string; category?: string } = {}): number {
+    const { where, args } = toolFilter(params);
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM tools t ${where}`)
+      .get(...args) as { n: number };
+    return row.n;
+  }
+
+  /** Tools that share a server prefix (everything before '#') — the "company page" siblings. */
+  siblingTools(tool_id: string, limit = 12): (ToolRecord & { n_outcomes: number })[] {
+    const prefix = tool_id.split('#')[0];
+    return this.db
+      .prepare(
+        `SELECT t.*, COALESCE(c.n, 0) AS n_outcomes
+         FROM tools t
+         LEFT JOIN (SELECT tool_id, COUNT(*) AS n FROM outcomes GROUP BY tool_id) c
+           ON c.tool_id = t.tool_id
+         WHERE (t.tool_id = ? OR t.tool_id LIKE ?) AND t.tool_id != ?
+         ORDER BY n_outcomes DESC, t.name COLLATE NOCASE ASC LIMIT ?`,
+      )
+      .all(prefix, `${prefix}#%`, tool_id, limit) as unknown as (ToolRecord & {
+      n_outcomes: number;
+    })[];
+  }
+
+  /** Only tools that actually have outcomes — keeps the leaderboard cheap at catalog scale. */
+  ratedToolIds(category?: string): string[] {
+    const rows = category
+      ? this.db
+          .prepare(
+            `SELECT DISTINCT o.tool_id FROM outcomes o
+             JOIN tools t ON t.tool_id = o.tool_id WHERE t.category = ?`,
+          )
+          .all(category)
+      : this.db.prepare('SELECT DISTINCT tool_id FROM outcomes').all();
+    return (rows as { tool_id: string }[]).map((r) => r.tool_id);
   }
 
   listTools(category?: string): ToolRecord[] {
@@ -221,6 +311,24 @@ export class ToolProofDb {
   countOutcomes(): number {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM outcomes').get() as { n: number }).n;
   }
+}
+
+function toolFilter(params: { q?: string; category?: string }): {
+  where: string;
+  args: (string | number)[];
+} {
+  const clauses: string[] = [];
+  const args: (string | number)[] = [];
+  if (params.q?.trim()) {
+    const like = `%${params.q.trim().replace(/[%_]/g, '')}%`;
+    clauses.push('(t.name LIKE ? OR t.description LIKE ? OR t.tool_id LIKE ?)');
+    args.push(like, like, like);
+  }
+  if (params.category) {
+    clauses.push('t.category = ?');
+    args.push(params.category);
+  }
+  return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', args };
 }
 
 function rowToOutcome(row: Record<string, unknown>): StoredOutcome {

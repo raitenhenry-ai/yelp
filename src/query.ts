@@ -94,12 +94,58 @@ export function getLeaderboard(
   limit = 20,
   scoring: Partial<ScoringOptions> = {},
 ): ToolScore[] {
-  const tools = db.listTools(category);
-  const scored = tools
-    .map((t) => scoreTool(t, db.outcomesForTool(t.tool_id), scoring))
-    .filter((s) => s.n_outcomes > 0);
+  // Only rated tools — with an imported catalog of thousands of unreviewed
+  // pages, scoring every row would be wasted work.
+  const scored = db
+    .ratedToolIds(category)
+    .map((id) => {
+      const tool = db.getTool(id);
+      return tool ? scoreTool(tool, db.outcomesForTool(id), scoring) : null;
+    })
+    .filter((s): s is ToolScore => s !== null);
   scored.sort((a, b) => b.rank_score - a.rank_score);
   return scored.slice(0, limit);
+}
+
+export interface DirectoryEntry {
+  tool_id: string;
+  name: string;
+  category: string;
+  description: string;
+  homepage: string | null;
+  n_outcomes: number;
+  /** Present only for tools with at least one outcome. */
+  score?: ToolScore;
+}
+
+export interface DirectoryResult {
+  entries: DirectoryEntry[];
+  total: number;
+  page: number;
+  pages: number;
+  per_page: number;
+}
+
+export function getDirectory(
+  db: ToolProofDb,
+  params: { q?: string; category?: string; page?: number; per_page?: number } = {},
+  scoring: Partial<ScoringOptions> = {},
+): DirectoryResult {
+  const perPage = Math.min(Math.max(params.per_page ?? 30, 1), 100);
+  const total = db.countTools(params);
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(params.page ?? 1, 1), pages);
+  const rows = db.searchTools({ ...params, limit: perPage, offset: (page - 1) * perPage });
+  const entries: DirectoryEntry[] = rows.map((t) => ({
+    tool_id: t.tool_id,
+    name: t.name,
+    category: t.category,
+    description: t.description,
+    homepage: t.homepage,
+    n_outcomes: t.n_outcomes,
+    score: t.n_outcomes > 0 ? scoreTool(t, db.outcomesForTool(t.tool_id), scoring) : undefined,
+  }));
+  return { entries, total, page, pages, per_page: perPage };
 }
 
 export function getFeed(db: ToolProofDb, limit = 50, category?: string): FeedItem[] {

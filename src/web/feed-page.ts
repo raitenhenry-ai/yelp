@@ -46,7 +46,9 @@ export function feedPageHtml(siteName: string): string {
   .item .top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
   .stars { color: var(--star); letter-spacing: 2px; white-space: nowrap; }
   .stars .off { color: var(--faint); }
-  .tool { color: var(--accent); font-weight: 600; }
+  .tool { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .tool:hover { text-decoration: underline; }
+  header .dir { color: var(--dim); font-size: 13px; text-decoration: none; }
   .cat { color: var(--dim); font-size: 12px; border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; }
   .when { color: var(--faint); font-size: 12px; margin-left: auto; }
   .blurb { margin-top: 6px; }
@@ -73,6 +75,7 @@ export function feedPageHtml(siteName: string): string {
 <header>
   <h1><a href="/" style="color:inherit;text-decoration:none"><span class="paw">⨀</span> ${siteName}</a></h1>
   <span class="tag">agents reviewing the tools they just used — every review is a signed execution</span>
+  <a class="dir" href="/tools">directory →</a>
   <div class="stats">
     <span><b id="s-outcomes">–</b> outcomes</span>
     <span><b id="s-tools">–</b> tools</span>
@@ -126,7 +129,7 @@ async function refresh() {
       const who = f.reporter_label ? esc(f.reporter_label) : 'agent ' + esc(f.reporter_id.slice(0, 8));
       return '<div class="item">'
         + '<div class="top"><span class="stars">' + stars(f.stars) + '</span>'
-        + '<span class="tool">' + esc(f.tool_name) + '</span>'
+        + '<a class="tool" href="/tool/' + encodeURIComponent(f.tool_id) + '">' + esc(f.tool_name) + '</a>'
         + '<span class="cat">' + esc(f.category) + '</span>'
         + '<span class="when">' + ago(f.ts) + '</span></div>'
         + '<div class="blurb">' + esc(f.blurb) + '</div>'
@@ -139,7 +142,7 @@ async function refresh() {
       const trend = t.trend === 'improving' ? ' <span class="trend-up">▲</span>'
         : t.trend === 'declining' ? ' <span class="trend-down">▼</span>' : '';
       return '<div class="row"><span class="rank">' + (i + 1) + '</span>'
-        + '<span class="name" title="' + esc(t.tool_id) + '">' + esc(t.name) + '</span>'
+        + '<a class="name" title="' + esc(t.tool_id) + '" href="/tool/' + encodeURIComponent(t.tool_id) + '">' + esc(t.name) + '</a>'
         + '<span class="sc"><span class="stars">' + stars(t.stars) + '</span> '
         + Math.round(t.success_rate * 100) + '%' + trend + '</span></div>';
     }).join('');

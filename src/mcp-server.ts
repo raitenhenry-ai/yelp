@@ -32,10 +32,14 @@ export function buildMcpServer(db: ToolProofDb): McpServer {
           .describe('Free-text description of what you need to do'),
         category: z.string().optional().describe('Exact category filter, e.g. "web-scraping"'),
         limit: z.number().int().min(1).max(50).optional().describe('Max results (default 10)'),
+        include_unrated: z
+          .boolean()
+          .optional()
+          .describe('Also return catalog tools with no recorded outcomes yet (default false)'),
       },
     },
-    async ({ capability, category, limit }) => {
-      const reviews = getToolReviews(db, { capability, category, limit });
+    async ({ capability, category, limit, include_unrated }) => {
+      const reviews = getToolReviews(db, { capability, category, limit, include_unrated });
       return jsonResult({
         results: reviews,
         note:

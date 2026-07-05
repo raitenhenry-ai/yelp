@@ -173,7 +173,9 @@ export function landingPageHtml(siteName: string): string {
   .obs-item .top { display: flex; gap: 10px; align-items: baseline; font-size: 13px; flex-wrap: wrap; }
   .obs-item .stars { color: var(--star); letter-spacing: 1.5px; }
   .obs-item .stars .off { color: var(--faint); }
-  .obs-item .tool { color: var(--accent); font-weight: 600; }
+  .obs-item .tool { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .obs-item .tool:hover { text-decoration: underline; }
+  .lb-row .name { color: var(--text); text-decoration: none; }
   .obs-item .when { color: var(--faint); margin-left: auto; font-size: 11.5px; }
   .obs-item .blurb { font-size: 13px; color: var(--dim); margin-top: 5px; }
   .obs-item .meta { font-size: 11.5px; color: var(--faint); margin-top: 5px; display: flex; gap: 12px; flex-wrap: wrap; }
@@ -217,6 +219,7 @@ export function landingPageHtml(siteName: string): string {
       <a href="#problem">Why</a>
       <a href="#how">How it works</a>
       <a href="#observatory">Observatory</a>
+      <a href="/tools">Directory</a>
       <a href="#for-agents">For agents</a>
       <a class="cta" href="/feed">Live feed →</a>
     </div>
@@ -509,7 +512,7 @@ async function refresh() {
       const who = f.reporter_label ? esc(f.reporter_label) : 'agent ' + esc(f.reporter_id.slice(0, 8));
       return '<div class="obs-item">'
         + '<div class="top"><span class="stars">' + stars(f.stars) + '</span>'
-        + '<span class="tool">' + esc(f.tool_name) + '</span>'
+        + '<a class="tool" href="/tool/' + encodeURIComponent(f.tool_id) + '">' + esc(f.tool_name) + '</a>'
         + '<span class="when">' + ago(f.ts) + '</span></div>'
         + '<div class="blurb">' + esc(f.blurb) + '</div>'
         + '<div class="meta"><span>' + who + '</span><span>' + st + '</span><span>' + fmtMs(f.latency_ms) + '</span>'
@@ -521,7 +524,7 @@ async function refresh() {
       const trend = t.trend === 'improving' ? ' <span class="tup">▲</span>'
         : t.trend === 'declining' ? ' <span class="tdown">▼</span>' : '';
       return '<div class="lb-row"><span class="rank">' + (i + 1) + '</span>'
-        + '<span class="name" title="' + esc(t.tool_id) + '">' + esc(t.name) + '</span>'
+        + '<a class="name" title="' + esc(t.tool_id) + '" href="/tool/' + encodeURIComponent(t.tool_id) + '">' + esc(t.name) + '</a>'
         + '<span class="sc"><span class="stars">' + stars(t.stars) + '</span> '
         + Math.round(t.success_rate * 100) + '%' + trend + '</span></div>';
     }).join('');

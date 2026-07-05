@@ -12,7 +12,8 @@
     "toolproof-web": "dist/bin/web.js",
     "toolproof-probe": "dist/bin/probe.js",
     "toolproof-seed": "dist/bin/seed.js",
-    "toolproof-keys": "dist/bin/keys.js"
+    "toolproof-keys": "dist/bin/keys.js",
+    "toolproof-import": "dist/bin/import.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -37,7 +38,8 @@
     "dev:mcp": "tsx src/bin/mcp.ts",
     "seed": "tsx src/bin/seed.ts",
     "probe": "tsx src/bin/probe.ts",
-    "keys": "tsx src/bin/keys.ts"
+    "keys": "tsx src/bin/keys.ts",
+    "import": "tsx src/bin/import.ts"
   },
   "keywords": [
     "mcp",
