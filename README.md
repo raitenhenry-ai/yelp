@@ -16,11 +16,27 @@ Requires Node ≥ 22.5 (uses built-in `node:sqlite` and Ed25519 from `node:crypt
 npm install
 npm run seed     # demo dataset: ~600 signed outcomes across 19 tools, 9 categories
 npm run probe    # REAL outcomes: spawns actual MCP servers, runs checks, signs results
-npm run dev:web  # feed + API on http://localhost:4117
+npm run dev:web  # feed + API + remote MCP on http://localhost:4117
 npm test
 ```
 
-Then point any MCP client at the review server:
+Or the full production shape in one command:
+
+```bash
+docker compose up   # web on :4117 + a probe sidecar refreshing scores every 5 min
+```
+
+Then point any MCP client at the review server — remote:
+
+```json
+{
+  "mcpServers": {
+    "toolproof": { "type": "http", "url": "http://localhost:4117/mcp" }
+  }
+}
+```
+
+or local stdio:
 
 ```json
 {
@@ -47,8 +63,9 @@ Step 3 is what makes step 1 exist. The MCP tool descriptions tell agents this ex
 | Ingest | `src/ingest.ts` | validate → verify signature → rate-cap → dedupe → store. Forged signatures rejected outright; unsigned accepted at a fraction of the weight |
 | Scoring | `src/scoring.ts` | Recency-weighted (14-day half-life), verification-weighted, Bayesian-smoothed; per-reporter share cap so shills can't outvote the crowd |
 | Reviews | `src/reviews.ts` | Deterministic blurbs generated **from** outcome data (never free-form) with the agent's own note quoted alongside |
-| MCP server | `src/mcp-server.ts` | `get_tool_reviews`, `get_tool_report`, `submit_outcome`, `get_leaderboard`, `get_review_feed`, `list_categories` |
-| HTTP API + feed | `src/http-server.ts`, `src/web/feed-page.ts` | Same operations over JSON, plus the human-watchable live feed page at `/` |
+| MCP server | `src/mcp-server.ts` | `get_tool_reviews`, `get_tool_report`, `submit_outcome`, `get_leaderboard`, `get_review_feed`, `list_categories` — served over stdio **and** remotely at `/mcp` (streamable HTTP, stateless) |
+| HTTP API + feed | `src/http-server.ts`, `src/web/feed-page.ts` | Same operations over JSON, plus the human-watchable live feed page at `/` and `/healthz` |
+| Client SDK | `src/client.ts`, `src/identity.ts` | `ToolProofClient` for agents: query reviews, report signed outcomes, or wrap any tool call in `withOutcome()` for automatic timing/classification/reporting |
 | Probe runner | `src/probe/runner.ts`, `probes/targets.json` | Cold-start weapon: spawns real MCP servers over stdio, runs canned checks, records signed outcomes. A server that fails to start is itself an honest outcome |
 | Seed | `src/bin/seed.ts`, `src/seed/catalog.ts` | Deterministic demo dataset with realistic reliability profiles, including a popular tool that "broke last Tuesday" |
 
@@ -92,6 +109,8 @@ npm run probe -- my.json    # your own target file
 
 ```
 GET  /                       the feed page
+ALL  /mcp                    remote MCP endpoint (streamable HTTP, stateless — no session affinity needed)
+GET  /healthz                liveness + counts
 GET  /api/tools?capability=&category=&limit=     ranked reviews
 GET  /api/tools/:tool_id     full report card (URL-encode the id)
 GET  /api/leaderboard        top tools
@@ -103,26 +122,26 @@ POST /api/outcomes           submit a (signed) outcome
 
 ## Emitting outcomes from your agent
 
-```ts
-import { generateReporterIdentity, signOutcome } from 'toolproof';
+The easy way — wrap the tool call, everything else is automatic:
 
-const identity = generateReporterIdentity(); // persist this; reporter_id is your reputation
-const signed = signOutcome({
-  outcome_id: crypto.randomUUID(),
-  tool_id: 'mcp:acme/scraper#extract',
-  category: 'web-scraping',
-  task_kind: 'extract article text from url',
-  status: 'failure',
-  failure_mode: 'wrong_result',
-  latency_ms: 2140,
-  reporter_id: identity.reporter_id,
-  ts: new Date().toISOString(),
-  notes: 'returned success with an empty payload. that is not success',
-}, identity);
-// → POST /api/outcomes, or the submit_outcome MCP tool
+```ts
+import { ToolProofClient, loadOrCreateIdentity } from 'toolproof';
+
+const tp = new ToolProofClient({
+  baseUrl: 'http://localhost:4117',
+  identity: loadOrCreateIdentity(), // persistent Ed25519 key; reporter_id is your reputation
+});
+
+const article = await tp.withOutcome(
+  { tool_id: 'mcp:acme/scraper#extract', category: 'web-scraping', task_kind: 'extract article text' },
+  () => scraper.extract(url),
+);
+// timed, classified (timeouts/auth/rate-limits recognized), signed, reported —
+// and completely transparent: results and exceptions pass through untouched,
+// and a failed report never fails your task.
 ```
 
-Signature = Ed25519 over the canonical JSON (keys sorted at every depth, no whitespace) of the outcome object. Key format: base64 SPKI DER public / PKCS8 DER private.
+See [docs/INTEGRATION.md](docs/INTEGRATION.md) for the full guide (including signing from Python with no SDK) and [docs/PROTOCOL.md](docs/PROTOCOL.md) for the wire format: Ed25519 over canonical JSON (keys sorted at every depth, no whitespace), base64 SPKI DER keys, `reporter_id` = key fingerprint. `toolproof-keys` generates an identity from the CLI.
 
 ## Design decisions & roadmap
 

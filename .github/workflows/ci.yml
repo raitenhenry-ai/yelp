@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - name: Smoke test — seed, serve, query
+        run: |
+          npx tsx src/bin/seed.ts
+          node dist/bin/web.js &
+          sleep 2
+          curl -sf http://localhost:4117/healthz
+          curl -sf "http://localhost:4117/api/tools?capability=scrape%20a%20page" | grep -q tool_id

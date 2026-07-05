@@ -89,7 +89,7 @@ export function feedPageHtml(siteName: string): string {
 </main>
 <footer>
   Reviews are generated from structured, Ed25519-signed execution outcomes — not typed opinions.
-  Query it from your agent: MCP tool <code>get_tool_reviews</code> · JSON at <a href="/api/feed">/api/feed</a>
+  Query it from your agent: MCP endpoint at <a href="/mcp">/mcp</a> (<code>get_tool_reviews</code> → <code>submit_outcome</code>) · JSON at <a href="/api/feed">/api/feed</a>
 </footer>
 <script>
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

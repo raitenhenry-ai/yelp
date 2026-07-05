@@ -1,12 +1,16 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { ToolProofDb } from './db.js';
 import { ingestOutcome } from './ingest.js';
+import { buildMcpServer } from './mcp-server.js';
 import { getFeed, getLeaderboard, getToolReport, getToolReviews } from './query.js';
 import { feedPageHtml } from './web/feed-page.js';
 
 /**
  * Minimal dependency-free HTTP surface:
  *   GET  /                      — the human-watchable feed page
+ *   ALL  /mcp                   — remote MCP endpoint (Streamable HTTP, stateless)
+ *   GET  /healthz               — liveness + headline counts
  *   GET  /api/feed              — recent reviews (limit, category)
  *   GET  /api/tools             — get_tool_reviews (capability, category, limit)
  *   GET  /api/tools/:tool_id    — full report (tool_id is URL-encoded)
@@ -20,9 +24,46 @@ export function buildHttpServer(db: ToolProofDb, siteName = 'ToolProof'): Server
     try {
       await route(db, siteName, req, res);
     } catch (err) {
-      sendJson(res, 500, { error: err instanceof Error ? err.message : 'internal error' });
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: err instanceof Error ? err.message : 'internal error' });
+      } else {
+        res.end();
+      }
     }
   });
+}
+
+/**
+ * Stateless remote MCP: each request gets a fresh server + transport pair
+ * (cheap — no I/O at construction), so any load balancer works and no session
+ * affinity is needed. GET/DELETE get the spec-mandated 405 from the SDK.
+ */
+async function handleMcp(
+  db: ToolProofDb,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  const server = buildMcpServer(db);
+  res.on('close', () => {
+    void transport.close();
+    void server.close();
+  });
+  await server.connect(transport);
+  let body: unknown;
+  if (req.method === 'POST') {
+    const raw = await readBody(req, 256 * 1024);
+    try {
+      body = raw ? JSON.parse(raw) : undefined;
+    } catch {
+      sendJson(res, 400, { error: 'invalid JSON body' });
+      return;
+    }
+  }
+  await transport.handleRequest(req, res, body);
 }
 
 async function route(
@@ -38,6 +79,16 @@ async function route(
   if (req.method === 'GET' && path === '/') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(feedPageHtml(siteName));
+    return;
+  }
+
+  if (path === '/mcp') {
+    await handleMcp(db, req, res);
+    return;
+  }
+
+  if (req.method === 'GET' && path === '/healthz') {
+    sendJson(res, 200, { ok: true, outcomes: db.countOutcomes(), uptime_s: process.uptime() });
     return;
   }
 

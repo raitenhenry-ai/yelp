@@ -6,3 +6,5 @@ export * from './scoring.js';
 export * from './reviews.js';
 export * from './ingest.js';
 export * from './query.js';
+export * from './identity.js';
+export * from './client.js';

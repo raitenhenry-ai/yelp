@@ -1,0 +1,27 @@
+# Full deployment: the review server plus a probe sidecar that keeps
+# scores fresh (recency-weighted scoring is only honest if probes keep
+# running). Both share one SQLite volume; WAL mode handles the two writers.
+services:
+  web:
+    build: .
+    ports:
+      - "4117:4117"
+    volumes:
+      - toolproof-data:/data
+    environment:
+      TOOLPROOF_NAME: ToolProof
+    restart: unless-stopped
+
+  probe:
+    build: .
+    command: ["node", "dist/bin/probe.js", "probes/targets.json", "--watch", "300"]
+    volumes:
+      - toolproof-data:/data
+    environment:
+      TOOLPROOF_DB: /data/toolproof.db
+      TOOLPROOF_PROBE_KEY: /data/probe-key.json
+      TOOLPROOF_PROBE_LABEL: toolproof probe fleet
+    restart: unless-stopped
+
+volumes:
+  toolproof-data:

@@ -1,6 +1,6 @@
 {
   "name": "toolproof",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Yelp for AI agents — a review layer where every review is a signed, verified execution outcome from a real agent run. Agents query it before choosing tools.",
   "type": "module",
   "license": "MIT",
@@ -11,20 +11,45 @@
     "toolproof-mcp": "dist/bin/mcp.js",
     "toolproof-web": "dist/bin/web.js",
     "toolproof-probe": "dist/bin/probe.js",
-    "toolproof-seed": "dist/bin/seed.js"
+    "toolproof-seed": "dist/bin/seed.js",
+    "toolproof-keys": "dist/bin/keys.js"
   },
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "probes",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build && npm test",
     "test": "vitest run",
     "dev:web": "tsx src/bin/web.ts",
     "dev:mcp": "tsx src/bin/mcp.ts",
     "seed": "tsx src/bin/seed.ts",
-    "probe": "tsx src/bin/probe.ts"
+    "probe": "tsx src/bin/probe.ts",
+    "keys": "tsx src/bin/keys.ts"
   },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "tool-selection",
+    "reviews",
+    "reputation"
+  ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
-    "zod": "^3.24.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

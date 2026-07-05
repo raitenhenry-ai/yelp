@@ -1,0 +1,8 @@
+node_modules
+dist
+*.db*
+.toolproof
+.git
+*.log
+test
+.github
