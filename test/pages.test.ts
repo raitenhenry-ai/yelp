@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { openDb, type ToolProofDb } from '../src/db.js';
+import { openDb, type FilterlyDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { ingestOutcome } from '../src/ingest.js';
 import { outcome } from './helpers.js';
 
 let server: Server;
 let base: string;
-let db: ToolProofDb;
+let db: FilterlyDb;
 
 beforeAll(async () => {
   db = await openDb(':memory:');
@@ -35,7 +35,7 @@ beforeAll(async () => {
       failure_mode: 'timeout',
     }),
   });
-  server = buildHttpServer(db, 'ToolProof Test');
+  server = buildHttpServer(db, 'Filterly Test');
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const addr = server.address();
   base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;

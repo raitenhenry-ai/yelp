@@ -1,4 +1,4 @@
-# ToolProof outcome protocol v1
+# Filterly outcome protocol v1
 
 This document specifies the wire format for execution outcomes so that any
 agent, in any language, can emit verifiable reviews. The reference

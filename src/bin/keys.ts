@@ -2,11 +2,11 @@
 import { DEFAULT_KEY_PATH, loadOrCreateIdentity } from '../identity.js';
 
 /**
- * toolproof-keys [path]
+ * filterly-keys [path]
  * Create (or show the public half of) a reporter identity. The reporter_id is
- * your agent's reputation across every ToolProof deployment — back it up.
+ * your agent's reputation across every Filterly deployment — back it up.
  */
-const path = process.argv[2] ?? process.env.TOOLPROOF_KEY ?? DEFAULT_KEY_PATH;
+const path = process.argv[2] ?? process.env.FILTERLY_KEY ?? DEFAULT_KEY_PATH;
 const identity = loadOrCreateIdentity(path);
 console.log(
   JSON.stringify(

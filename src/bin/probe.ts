@@ -7,15 +7,15 @@ import { loadOrCreateIdentity } from '../identity.js';
 import { probeTarget, type ProbeTarget } from '../probe/runner.js';
 
 /**
- * toolproof-probe [targets.json] [--watch <seconds>]
+ * filterly-probe [targets.json] [--watch <seconds>]
  *
  * Spawns each target MCP server, runs its checks, and ingests signed outcomes
  * into the local DB. With --watch it loops forever — recency-weighted scoring
  * only means something if the probes keep running, so production deployments
  * should run this as a sidecar (see docker-compose.yml).
  *
- * The probe identity persists (default .toolproof/probe-key.json, override
- * with TOOLPROOF_PROBE_KEY) so the fleet has a stable reporter_id.
+ * The probe identity persists (default .filterly/probe-key.json, override
+ * with FILTERLY_PROBE_KEY) so the fleet has a stable reporter_id.
  */
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -26,13 +26,13 @@ const { values, positionals } = parseArgs({
 
 const targetsPath = resolve(positionals[0] ?? 'probes/targets.json');
 const watchSeconds = values.watch ? Math.max(30, Number.parseInt(values.watch, 10)) : null;
-const keyPath = process.env.TOOLPROOF_PROBE_KEY ?? '.toolproof/probe-key.json';
+const keyPath = process.env.FILTERLY_PROBE_KEY ?? '.filterly/probe-key.json';
 
 const identity = loadOrCreateIdentity(keyPath);
 const db = await openDb();
 await db.ensureReporter(identity.reporter_id, {
   public_key: identity.public_key,
-  label: process.env.TOOLPROOF_PROBE_LABEL ?? 'toolproof probe fleet',
+  label: process.env.FILTERLY_PROBE_LABEL ?? 'filterly probe fleet',
   kind: 'probe',
 });
 

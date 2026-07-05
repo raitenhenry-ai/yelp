@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ToolProofDb } from './db.js';
+import type { FilterlyDb } from './db.js';
 import { ingestOutcome } from './ingest.js';
 import { getFeed, getLeaderboard, getToolReport, getToolReviews } from './query.js';
 import { ExecutionOutcomeSchema } from './types.js';
@@ -10,9 +10,9 @@ import { ExecutionOutcomeSchema } from './types.js';
  * signal lives where the agent actually decides. An agent lists its candidate
  * tools, calls get_tool_reviews, picks, runs, then calls submit_outcome.
  */
-export function buildMcpServer(db: ToolProofDb): McpServer {
+export function buildMcpServer(db: FilterlyDb): McpServer {
   const server = new McpServer({
-    name: 'toolproof',
+    name: 'filterly',
     version: '0.1.0',
   });
 

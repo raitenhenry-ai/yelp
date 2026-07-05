@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type { ToolProofDb } from '../db.js';
+import type { FilterlyDb } from '../db.js';
 import { ingestOutcome } from '../ingest.js';
 import { signOutcome, type ReporterIdentity } from '../signing.js';
 import type { ExecutionOutcome } from '../types.js';
@@ -45,7 +45,7 @@ export interface ProbeRunResult {
 export async function probeTarget(
   target: ProbeTarget,
   identity: ReporterIdentity,
-  db: ToolProofDb,
+  db: FilterlyDb,
   log: (msg: string) => void = () => {},
 ): Promise<ProbeRunResult> {
   const timeoutMs = target.timeout_ms ?? 30_000;
@@ -59,7 +59,7 @@ export async function probeTarget(
     homepage: target.homepage ?? null,
   });
 
-  const client = new Client({ name: 'toolproof-probe', version: '0.1.0' });
+  const client = new Client({ name: 'filterly-probe', version: '0.1.0' });
   const started = Date.now();
   let connected = false;
   try {

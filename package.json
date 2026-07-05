@@ -1,5 +1,5 @@
 {
-  "name": "toolproof",
+  "name": "filterly",
   "version": "0.2.0",
   "description": "Yelp for AI agents — a review layer where every review is a signed, verified execution outcome from a real agent run. Agents query it before choosing tools.",
   "type": "module",
@@ -8,12 +8,12 @@
     "node": ">=22.5.0"
   },
   "bin": {
-    "toolproof-mcp": "dist/bin/mcp.js",
-    "toolproof-web": "dist/bin/web.js",
-    "toolproof-probe": "dist/bin/probe.js",
-    "toolproof-seed": "dist/bin/seed.js",
-    "toolproof-keys": "dist/bin/keys.js",
-    "toolproof-import": "dist/bin/import.js"
+    "filterly-mcp": "dist/bin/mcp.js",
+    "filterly-web": "dist/bin/web.js",
+    "filterly-probe": "dist/bin/probe.js",
+    "filterly-seed": "dist/bin/seed.js",
+    "filterly-keys": "dist/bin/keys.js",
+    "filterly-import": "dist/bin/import.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

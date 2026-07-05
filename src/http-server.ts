@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import type { ToolProofDb } from './db.js';
+import type { FilterlyDb } from './db.js';
 import { ingestOutcome } from './ingest.js';
 import { buildMcpServer } from './mcp-server.js';
 import { getDirectory, getFeed, getLeaderboard, getToolReport, getToolReviews } from './query.js';
@@ -26,7 +26,7 @@ import { toolPageHtml } from './web/tool-page.js';
  *   GET  /api/stats             — headline counts
  *   POST /api/outcomes          — submit a (signed) outcome
  */
-export function buildHttpServer(db: ToolProofDb, siteName = 'ToolProof'): Server {
+export function buildHttpServer(db: FilterlyDb, siteName = 'Filterly'): Server {
   return createServer(async (req, res) => {
     try {
       await route(db, siteName, req, res);
@@ -48,7 +48,7 @@ export function buildHttpServer(db: ToolProofDb, siteName = 'ToolProof'): Server
  * those with 405 (rather than leaving an idle event-stream open per GET).
  */
 async function handleMcp(
-  db: ToolProofDb,
+  db: FilterlyDb,
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
@@ -74,7 +74,7 @@ async function handleMcp(
 }
 
 async function route(
-  db: ToolProofDb,
+  db: FilterlyDb,
   siteName: string,
   req: IncomingMessage,
   res: ServerResponse,

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import type { ToolProofDb } from '../src/db.js';
+import type { FilterlyDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { scoreTool, DEFAULT_SCORING, UNVERIFIED_REPORTER_BUCKET } from '../src/scoring.js';
 import { safeHref } from '../src/web/shared.js';
@@ -150,7 +150,7 @@ describe('safeHref (H1)', () => {
 describe('HTTP hardening', () => {
   let server: Server;
   let base: string;
-  let db: ToolProofDb;
+  let db: FilterlyDb;
 
   beforeAll(async () => {
     db = await memDb();

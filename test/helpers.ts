@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { openDb, type ToolProofDb } from '../src/db.js';
+import { openDb, type FilterlyDb } from '../src/db.js';
 import type { ExecutionOutcome } from '../src/types.js';
 
 /** In-memory SQLite store for tests. Async because the store interface is. */
-export function memDb(): Promise<ToolProofDb> {
+export function memDb(): Promise<FilterlyDb> {
   return openDb(':memory:');
 }
 

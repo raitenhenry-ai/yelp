@@ -9,7 +9,7 @@ import type { ToolReport, ToolReview } from './query.js';
  *   1. Ask before choosing:   client.getToolReviews({ capability: '…' })
  *   2. Report after using:    client.reportOutcome({ … })  — signed automatically
  *
- * Or wrap the tool call itself and let ToolProof time and classify it:
+ * Or wrap the tool call itself and let Filterly time and classify it:
  *
  *   const result = await client.withOutcome(
  *     { tool_id: 'mcp:acme/scraper#extract', category: 'web-scraping',
@@ -17,7 +17,7 @@ import type { ToolReport, ToolReview } from './query.js';
  *     () => scraper.extract(url),
  *   );
  */
-export interface ToolProofClientOptions {
+export interface FilterlyClientOptions {
   baseUrl: string;
   /** Identity used to sign outcomes. Omit to submit unverified (low-weight) reports. */
   identity?: ReporterIdentity;
@@ -44,7 +44,7 @@ export interface WithOutcomeOptions<T> {
   cost_usd?: number;
 }
 
-export class ToolProofClient {
+export class FilterlyClient {
   private readonly baseUrl: string;
   private readonly identity?: ReporterIdentity;
   private readonly fetchFn: typeof fetch;
@@ -53,7 +53,7 @@ export class ToolProofClient {
    * bucket (these reports are unverified and low-weight regardless). */
   private readonly anonReporterId: string;
 
-  constructor(opts: ToolProofClientOptions) {
+  constructor(opts: FilterlyClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, '');
     this.identity = opts.identity;
     this.fetchFn = opts.fetchFn ?? fetch;
@@ -78,7 +78,7 @@ export class ToolProofClient {
   async getToolReport(toolId: string): Promise<ToolReport | null> {
     const res = await this.fetchFn(`${this.baseUrl}/api/tools/${encodeURIComponent(toolId)}`);
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`toolproof: GET /api/tools/${toolId} → ${res.status}`);
+    if (!res.ok) throw new Error(`filterly: GET /api/tools/${toolId} → ${res.status}`);
     return (await res.json()) as ToolReport;
   }
 
@@ -166,7 +166,7 @@ export class ToolProofClient {
 
   private async get(path: string): Promise<unknown> {
     const res = await this.fetchFn(`${this.baseUrl}${path}`);
-    if (!res.ok) throw new Error(`toolproof: GET ${path} → ${res.status}`);
+    if (!res.ok) throw new Error(`filterly: GET ${path} → ${res.status}`);
     return res.json();
   }
 }

@@ -1,4 +1,4 @@
-import type { ToolProofDb } from './db.js';
+import type { FilterlyDb } from './db.js';
 import { scoreTool, starsForOutcome, type ScoringOptions } from './scoring.js';
 import { blurbForOutcome, summaryForTool } from './reviews.js';
 import type { FeedItem, StoredOutcome, ToolRecord, ToolScore } from './types.js';
@@ -24,7 +24,7 @@ export interface GetToolReviewsParams {
 }
 
 export async function getToolReviews(
-  db: ToolProofDb,
+  db: FilterlyDb,
   params: GetToolReviewsParams = {},
   scoring: Partial<ScoringOptions> = {},
 ): Promise<ToolReview[]> {
@@ -88,7 +88,7 @@ export interface ToolReport extends ToolReview {
 }
 
 export async function getToolReport(
-  db: ToolProofDb,
+  db: FilterlyDb,
   tool_id: string,
   scoring: Partial<ScoringOptions> = {},
 ): Promise<ToolReport | null> {
@@ -112,7 +112,7 @@ export async function getToolReport(
 }
 
 export async function getLeaderboard(
-  db: ToolProofDb,
+  db: FilterlyDb,
   category?: string,
   limit = 20,
   scoring: Partial<ScoringOptions> = {},
@@ -152,7 +152,7 @@ export interface DirectoryResult {
 }
 
 export async function getDirectory(
-  db: ToolProofDb,
+  db: FilterlyDb,
   params: { q?: string; category?: string; page?: number; per_page?: number } = {},
   scoring: Partial<ScoringOptions> = {},
 ): Promise<DirectoryResult> {
@@ -182,7 +182,7 @@ export async function getDirectory(
 }
 
 export async function getFeed(
-  db: ToolProofDb,
+  db: FilterlyDb,
   limit = 50,
   category?: string,
 ): Promise<FeedItem[]> {

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { ToolProofClient } from '../src/client.js';
-import { openDb, type ToolProofDb } from '../src/db.js';
+import { FilterlyClient } from '../src/client.js';
+import { openDb, type FilterlyDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { generateReporterIdentity } from '../src/signing.js';
 
 let server: Server;
 let base: string;
-let db: ToolProofDb;
+let db: FilterlyDb;
 const identity = generateReporterIdentity();
 
 beforeAll(async () => {
@@ -23,9 +23,9 @@ afterAll(async () => {
   await db.close();
 });
 
-describe('ToolProofClient', () => {
+describe('FilterlyClient', () => {
   it('reports a signed outcome and reads it back through reviews', async () => {
-    const tp = new ToolProofClient({ baseUrl: base, identity });
+    const tp = new FilterlyClient({ baseUrl: base, identity });
     const res = await tp.reportOutcome({
       tool_id: 'mcp:client/emailer',
       tool_name: 'Client Emailer',
@@ -46,7 +46,7 @@ describe('ToolProofClient', () => {
   });
 
   it('withOutcome times a successful call and reports it without interfering', async () => {
-    const tp = new ToolProofClient({ baseUrl: base, identity });
+    const tp = new FilterlyClient({ baseUrl: base, identity });
     const before = await db.countOutcomes();
     const value = await tp.withOutcome(
       { tool_id: 'mcp:client/adder', category: 'math', task_kind: 'add numbers' },
@@ -64,7 +64,7 @@ describe('ToolProofClient', () => {
   });
 
   it('withOutcome classifies a thrown timeout and rethrows the original error', async () => {
-    const tp = new ToolProofClient({ baseUrl: base, identity });
+    const tp = new FilterlyClient({ baseUrl: base, identity });
     const before = await db.countOutcomes();
     await expect(
       tp.withOutcome(
@@ -81,7 +81,7 @@ describe('ToolProofClient', () => {
   });
 
   it('withOutcome honors a custom classifier for in-band failures', async () => {
-    const tp = new ToolProofClient({ baseUrl: base, identity });
+    const tp = new FilterlyClient({ baseUrl: base, identity });
     const before = await db.countOutcomes();
     const result = await tp.withOutcome(
       { tool_id: 'mcp:client/hollow', category: 'testing', task_kind: 'return something' },
@@ -101,7 +101,7 @@ describe('ToolProofClient', () => {
   });
 
   it('never throws from reporting when the server is unreachable', async () => {
-    const tp = new ToolProofClient({ baseUrl: 'http://127.0.0.1:1', identity });
+    const tp = new FilterlyClient({ baseUrl: 'http://127.0.0.1:1', identity });
     const res = await tp.reportOutcome({
       tool_id: 'mcp:client/void',
       category: 'testing',
@@ -114,13 +114,13 @@ describe('ToolProofClient', () => {
   });
 
   it('getToolReport returns null for an unknown tool (F2), not a throw', async () => {
-    const tp = new ToolProofClient({ baseUrl: base });
+    const tp = new FilterlyClient({ baseUrl: base });
     await expect(tp.getToolReport('mcp:nope/never')).resolves.toBeNull();
   });
 
   it('distinct identity-less clients get distinct anonymous reporter_ids (F1)', async () => {
-    const a = new ToolProofClient({ baseUrl: base });
-    const b = new ToolProofClient({ baseUrl: base });
+    const a = new FilterlyClient({ baseUrl: base });
+    const b = new FilterlyClient({ baseUrl: base });
     const ra = await a.reportOutcome({
       tool_id: 'mcp:anon/a',
       category: 'testing',
@@ -143,7 +143,7 @@ describe('ToolProofClient', () => {
   });
 
   it('unsigned client reports land as unverified', async () => {
-    const tp = new ToolProofClient({ baseUrl: base });
+    const tp = new FilterlyClient({ baseUrl: base });
     const res = await tp.reportOutcome({
       tool_id: 'mcp:client/anon',
       category: 'testing',

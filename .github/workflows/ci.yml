@@ -12,17 +12,17 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: toolproof
-          POSTGRES_PASSWORD: toolproof
-          POSTGRES_DB: toolproof
+          POSTGRES_USER: filterly
+          POSTGRES_PASSWORD: filterly
+          POSTGRES_DB: filterly
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U toolproof"
+          --health-cmd "pg_isready -U filterly"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       # Exercises the Postgres backend + dialect parity tests (test/pg.test.ts).
-      TEST_DATABASE_URL: postgresql://toolproof:toolproof@localhost:5432/toolproof
+      TEST_DATABASE_URL: postgresql://filterly:filterly@localhost:5432/filterly
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,7 +41,7 @@ jobs:
           curl -sf "http://localhost:4117/api/tools?capability=scrape%20a%20page" | grep -q tool_id
       - name: Smoke test on Postgres — seed + serve against Neon-shaped DB
         env:
-          DATABASE_URL: postgresql://toolproof:toolproof@localhost:5432/toolproof
+          DATABASE_URL: postgresql://filterly:filterly@localhost:5432/filterly
         run: |
           npx tsx src/bin/seed.ts
           PORT=4300 node dist/bin/web.js &

@@ -4,7 +4,7 @@ import { openDb } from '../db.js';
 import { IMPORT_SOURCES } from '../import/sources.js';
 
 /**
- * toolproof-import [source…] [--max N]
+ * filterly-import [source…] [--max N]
  * Sources: mcp-registry, npm (default: all). Creates a directory page for
  * every discovered tool; re-running only fills gaps, never overwrites.
  */

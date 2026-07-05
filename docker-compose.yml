@@ -4,7 +4,7 @@
 #
 # To run against Postgres instead (matching a Railway + Neon deploy), set
 # DATABASE_URL on both services — e.g. uncomment the `postgres` service below
-# and add `DATABASE_URL: postgres://toolproof:toolproof@postgres:5432/toolproof`
+# and add `DATABASE_URL: postgres://filterly:filterly@postgres:5432/filterly`
 # to each service's environment. When DATABASE_URL is set, the SQLite volume is
 # unused.
 services:
@@ -13,20 +13,20 @@ services:
     ports:
       - "4117:4117"
     volumes:
-      - toolproof-data:/data
+      - filterly-data:/data
     environment:
-      TOOLPROOF_NAME: ToolProof
+      FILTERLY_NAME: Filterly
     restart: unless-stopped
 
   probe:
     build: .
     command: ["node", "dist/bin/probe.js", "probes/targets.json", "--watch", "300"]
     volumes:
-      - toolproof-data:/data
+      - filterly-data:/data
     environment:
-      TOOLPROOF_DB: /data/toolproof.db
-      TOOLPROOF_PROBE_KEY: /data/probe-key.json
-      TOOLPROOF_PROBE_LABEL: toolproof probe fleet
+      FILTERLY_DB: /data/filterly.db
+      FILTERLY_PROBE_KEY: /data/probe-key.json
+      FILTERLY_PROBE_LABEL: filterly probe fleet
     restart: unless-stopped
 
   # Uncomment to test the Postgres backend locally (then add DATABASE_URL to
@@ -34,12 +34,12 @@ services:
   # postgres:
   #   image: postgres:16-alpine
   #   environment:
-  #     POSTGRES_USER: toolproof
-  #     POSTGRES_PASSWORD: toolproof
-  #     POSTGRES_DB: toolproof
+  #     POSTGRES_USER: filterly
+  #     POSTGRES_PASSWORD: filterly
+  #     POSTGRES_DB: filterly
   #   volumes:
-  #     - toolproof-pg:/var/lib/postgresql/data
+  #     - filterly-pg:/var/lib/postgresql/data
 
 volumes:
-  toolproof-data:
-  # toolproof-pg:
+  filterly-data:
+  # filterly-pg:

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ingestOutcome } from '../src/ingest.js';
 import { getFeed, getToolReport, getToolReviews } from '../src/query.js';
 import { daysAgo, memDb, outcome } from './helpers.js';
-import type { ToolProofDb } from '../src/db.js';
+import type { FilterlyDb } from '../src/db.js';
 
-async function seedTwoScrapers(): Promise<ToolProofDb> {
+async function seedTwoScrapers(): Promise<FilterlyDb> {
   const db = await memDb();
   await db.upsertTool({
     tool_id: 'mcp:good/scraper',

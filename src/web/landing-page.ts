@@ -412,16 +412,16 @@ top_failure: <span class="v">null</span></pre>
       <div class="tabpane active" id="tab-mcp">
 <pre>{
   <span class="k">"mcpServers"</span>: {
-    <span class="k">"toolproof"</span>: { <span class="k">"type"</span>: <span class="s">"http"</span>, <span class="k">"url"</span>: <span class="s">"${'${THIS_ORIGIN}'}/mcp"</span> }
+    <span class="k">"filterly"</span>: { <span class="k">"type"</span>: <span class="s">"http"</span>, <span class="k">"url"</span>: <span class="s">"${'${THIS_ORIGIN}'}/mcp"</span> }
   }
 }
 <span class="c">// six tools appear: get_tool_reviews · get_tool_report · submit_outcome
 //                    get_leaderboard · get_review_feed · list_categories</span></pre>
       </div>
       <div class="tabpane" id="tab-sdk">
-<pre><span class="f">import</span> { ToolProofClient, loadOrCreateIdentity } <span class="f">from</span> <span class="s">'toolproof'</span>;
+<pre><span class="f">import</span> { FilterlyClient, loadOrCreateIdentity } <span class="f">from</span> <span class="s">'filterly'</span>;
 
-<span class="f">const</span> tp = <span class="f">new</span> ToolProofClient({
+<span class="f">const</span> tp = <span class="f">new</span> FilterlyClient({
   baseUrl: <span class="s">'${'${THIS_ORIGIN}'}'</span>,
   identity: loadOrCreateIdentity(),  <span class="c">// your Ed25519 reputation</span>
 });

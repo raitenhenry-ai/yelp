@@ -114,7 +114,7 @@ export function directoryPageHtml(
   <div class="cta-review">
     Using something that isn't listed? Just review it — <code>submit_outcome</code> with any new
     <code>tool_id</code> creates its page instantly. The catalog also re-syncs from the MCP registry
-    and npm via <code>toolproof-import</code>.
+    and npm via <code>filterly-import</code>.
   </div>
 </div>`;
 

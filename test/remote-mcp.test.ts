@@ -2,14 +2,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { openDb, type ToolProofDb } from '../src/db.js';
+import { openDb, type FilterlyDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { generateReporterIdentity, signOutcome } from '../src/signing.js';
 import { outcome } from './helpers.js';
 
 let server: Server;
 let base: string;
-let db: ToolProofDb;
+let db: FilterlyDb;
 
 beforeAll(async () => {
   db = await openDb(':memory:');

@@ -11,7 +11,7 @@ import { dirname } from 'node:path';
  * SQL is authored once with `?` placeholders and neutral syntax; the small
  * dialect differences (placeholder style, case-insensitive ordering, LIKE vs
  * ILIKE) are handled via the driver's `dialect` and the `ci`/`likeOp` helpers
- * on ToolProofDb.
+ * on FilterlyDb.
  */
 export type Dialect = 'sqlite' | 'pg';
 
@@ -133,7 +133,7 @@ export class PgDriver implements Driver {
  * `:memory:` for sqlite.
  */
 export async function openDriver(spec?: string): Promise<Driver> {
-  const target = spec ?? process.env.DATABASE_URL ?? process.env.TOOLPROOF_DB ?? 'toolproof.db';
+  const target = spec ?? process.env.DATABASE_URL ?? process.env.FILTERLY_DB ?? 'filterly.db';
   if (/^postgres(ql)?:\/\//i.test(target)) {
     return PgDriver.connect(target);
   }

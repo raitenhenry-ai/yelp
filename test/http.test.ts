@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { openDb, type ToolProofDb } from '../src/db.js';
+import { openDb, type FilterlyDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { generateReporterIdentity, signOutcome } from '../src/signing.js';
 import { outcome } from './helpers.js';
 
 let server: Server;
 let base: string;
-let db: ToolProofDb;
+let db: FilterlyDb;
 
 beforeAll(async () => {
   db = await openDb(':memory:');
-  server = buildHttpServer(db, 'ToolProof Test');
+  server = buildHttpServer(db, 'Filterly Test');
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const addr = server.address();
   base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
@@ -27,7 +27,7 @@ describe('HTTP API', () => {
     const res = await fetch(base + '/');
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('ToolProof Test');
+    expect(html).toContain('Filterly Test');
     expect(html).toContain('signed receipt');
     expect(html).toContain('id="obs-feed"'); // observatory polls the real API
     expect(html).toContain('/api/feed');
@@ -37,7 +37,7 @@ describe('HTTP API', () => {
     const res = await fetch(base + '/feed');
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('ToolProof Test');
+    expect(html).toContain('Filterly Test');
     expect(html).toContain('signed execution');
   });
 

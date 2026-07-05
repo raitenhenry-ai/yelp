@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { openDb, type ToolProofDb } from '../src/db.js';
+import { openDb, type FilterlyDb } from '../src/db.js';
 import { toPgPlaceholders, sslForConnectionString } from '../src/driver.js';
 import { ingestOutcome } from '../src/ingest.js';
 import { getDirectory, getLeaderboard, getToolReport, getToolReviews } from '../src/query.js';
@@ -32,7 +32,7 @@ const PG_URL = process.env.TEST_DATABASE_URL;
 const maybe = PG_URL ? describe : describe.skip;
 
 maybe('Postgres backend parity', () => {
-  let db: ToolProofDb;
+  let db: FilterlyDb;
 
   beforeAll(async () => {
     db = await openDb(PG_URL);

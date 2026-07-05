@@ -46,17 +46,17 @@ CREATE INDEX IF NOT EXISTS idx_outcomes_category ON outcomes (category);
 
 /**
  * Async data layer over a Driver (SQLite or Postgres). Open with `openDb()`,
- * which selects the backend from DATABASE_URL / TOOLPROOF_DB and creates the
+ * which selects the backend from DATABASE_URL / FILTERLY_DB and creates the
  * schema. Postgres returns COUNT(*) as a bigint string, so count results are
  * coerced with Number().
  */
-export class ToolProofDb {
+export class FilterlyDb {
   private constructor(readonly driver: Driver) {}
 
-  static async open(spec?: string): Promise<ToolProofDb> {
+  static async open(spec?: string): Promise<FilterlyDb> {
     const driver = await openDriver(spec);
     await driver.exec(schemaFor(driver.dialect));
-    return new ToolProofDb(driver);
+    return new FilterlyDb(driver);
   }
 
   async close(): Promise<void> {
@@ -381,8 +381,8 @@ export class ToolProofDb {
 }
 
 /** Open the data layer, selecting Postgres (DATABASE_URL) or SQLite by config. */
-export function openDb(spec?: string): Promise<ToolProofDb> {
-  return ToolProofDb.open(spec);
+export function openDb(spec?: string): Promise<FilterlyDb> {
+  return FilterlyDb.open(spec);
 }
 
 function rowToOutcome(row: Record<string, unknown>): StoredOutcome {

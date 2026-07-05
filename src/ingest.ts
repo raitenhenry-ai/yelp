@@ -1,4 +1,4 @@
-import type { ToolProofDb } from './db.js';
+import type { FilterlyDb } from './db.js';
 import { SignedOutcomeSchema, type IngestResult, type SignedOutcome } from './types.js';
 import { verifyOutcome } from './signing.js';
 
@@ -25,7 +25,7 @@ export const DEFAULT_LIMITS: IngestLimits = {
 };
 
 export async function ingestOutcome(
-  db: ToolProofDb,
+  db: FilterlyDb,
   input: unknown,
   limits: IngestLimits = DEFAULT_LIMITS,
 ): Promise<IngestResult> {

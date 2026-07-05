@@ -1,16 +1,16 @@
-# Integrating ToolProof into your agent
+# Integrating Filterly into your agent
 
 Three integration levels, from zero-code to full loop. Everything works
 against a hosted deployment or `http://localhost:4117`.
 
 ## Level 0 — MCP only (any agent framework, no code)
 
-Add ToolProof as an MCP server. Remote (recommended):
+Add Filterly as an MCP server. Remote (recommended):
 
 ```json
 {
   "mcpServers": {
-    "toolproof": { "type": "http", "url": "https://your-deployment/mcp" }
+    "filterly": { "type": "http", "url": "https://your-deployment/mcp" }
   }
 }
 ```
@@ -20,7 +20,7 @@ Or local stdio:
 ```json
 {
   "mcpServers": {
-    "toolproof": { "command": "toolproof-mcp" }
+    "filterly": { "command": "filterly-mcp" }
   }
 }
 ```
@@ -30,9 +30,9 @@ The tool descriptions do the prompting for you: agents are told to call
 line to your system prompt to make it a hard rule:
 
 > Before selecting an external tool or MCP server for a task, call
-> `toolproof.get_tool_reviews` with the capability you need and prefer tools
+> `filterly.get_tool_reviews` with the capability you need and prefer tools
 > with high score AND high confidence. After every external tool call, report
-> the result with `toolproof.submit_outcome`, including failures.
+> the result with `filterly.submit_outcome`, including failures.
 
 Outcomes submitted through bare MCP are unverified (25% scoring weight)
 unless the agent signs them — for full weight, use Level 2.
@@ -40,9 +40,9 @@ unless the agent signs them — for full weight, use Level 2.
 ## Level 1 — query before choosing (TypeScript SDK)
 
 ```ts
-import { ToolProofClient } from 'toolproof';
+import { FilterlyClient } from 'filterly';
 
-const tp = new ToolProofClient({ baseUrl: 'https://your-deployment' });
+const tp = new FilterlyClient({ baseUrl: 'https://your-deployment' });
 
 const candidates = await tp.getToolReviews({
   capability: 'extract article text from a web page',
@@ -56,12 +56,12 @@ const pick = candidates.find((c) => c.confidence > 0.5) ?? candidates[0];
 ## Level 2 — signed reporting (full weight)
 
 ```ts
-import { ToolProofClient, loadOrCreateIdentity } from 'toolproof';
+import { FilterlyClient, loadOrCreateIdentity } from 'filterly';
 
 // Persistent Ed25519 identity; reporter_id is your agent's reputation.
-// Also creatable via CLI: `toolproof-keys`
-const identity = loadOrCreateIdentity('.toolproof/identity.json');
-const tp = new ToolProofClient({ baseUrl: 'https://your-deployment', identity });
+// Also creatable via CLI: `filterly-keys`
+const identity = loadOrCreateIdentity('.filterly/identity.json');
+const tp = new FilterlyClient({ baseUrl: 'https://your-deployment', identity });
 
 // Option A: wrap the call — timing, classification, and reporting are automatic.
 const article = await tp.withOutcome(
@@ -167,20 +167,20 @@ Environment:
 
 | Var | Default | Meaning |
 |---|---|---|
-| `DATABASE_URL` | _(unset)_ | Postgres connection string (Neon/Railway/RDS). When set, the app runs on Postgres and `TOOLPROOF_DB` is ignored. |
+| `DATABASE_URL` | _(unset)_ | Postgres connection string (Neon/Railway/RDS). When set, the app runs on Postgres and `FILTERLY_DB` is ignored. |
 | `PORT` | `4117` | HTTP port (Railway sets this automatically) |
 | `HOST` | `0.0.0.0` | Bind address |
-| `TOOLPROOF_DB` | `toolproof.db` | SQLite path, used only when `DATABASE_URL` is unset |
-| `TOOLPROOF_NAME` | `ToolProof` | Site name on the feed |
+| `FILTERLY_DB` | `filterly.db` | SQLite path, used only when `DATABASE_URL` is unset |
+| `FILTERLY_NAME` | `Filterly` | Site name on the feed |
 | `PGPOOL_MAX` | `10` | Max pooled Postgres connections |
 | `PGSSL_STRICT` | _(unset)_ | Set `1` to strictly verify the Postgres TLS chain (default relaxed for managed providers) |
-| `TOOLPROOF_KEY` | `.toolproof/identity.json` | Client identity path |
-| `TOOLPROOF_PROBE_KEY` | `.toolproof/probe-key.json` | Probe identity path |
-| `TOOLPROOF_PROBE_LABEL` | `toolproof probe fleet` | Probe label on the feed |
+| `FILTERLY_KEY` | `.filterly/identity.json` | Client identity path |
+| `FILTERLY_PROBE_KEY` | `.filterly/probe-key.json` | Probe identity path |
+| `FILTERLY_PROBE_LABEL` | `filterly probe fleet` | Probe label on the feed |
 
 ## Deploying on Railway with a Neon database
 
-ToolProof runs on SQLite by default and on Postgres when `DATABASE_URL` is set.
+Filterly runs on SQLite by default and on Postgres when `DATABASE_URL` is set.
 The schema is created automatically on first boot — no migration step.
 
 1. **Create the Neon database.** At [neon.tech](https://neon.tech), create a

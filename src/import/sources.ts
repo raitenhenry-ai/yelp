@@ -1,4 +1,4 @@
-import type { ToolProofDb } from '../db.js';
+import type { FilterlyDb } from '../db.js';
 import { categorizeText } from '../catalog.js';
 
 /**
@@ -62,7 +62,7 @@ interface RegistryEntry {
 
 /** Official MCP registry: cursor-paginated, versioned — keep latest active only. */
 export async function importMcpRegistry(
-  db: ToolProofDb,
+  db: FilterlyDb,
   opts: ImportOptions = {},
 ): Promise<ImportStats> {
   // The registry paginates over VERSIONS, not servers — a full sweep sees
@@ -123,7 +123,7 @@ interface NpmSearchObject {
 }
 
 /** npm sweep: everything keyword-tagged mcp / mcp-server. */
-export async function importNpm(db: ToolProofDb, opts: ImportOptions = {}): Promise<ImportStats> {
+export async function importNpm(db: FilterlyDb, opts: ImportOptions = {}): Promise<ImportStats> {
   const max = opts.max ?? 5_000;
   const log = opts.log ?? (() => {});
   const fetchFn = opts.fetchFn ?? fetch;
@@ -167,7 +167,7 @@ export async function importNpm(db: ToolProofDb, opts: ImportOptions = {}): Prom
 
 export const IMPORT_SOURCES: Record<
   string,
-  (db: ToolProofDb, opts: ImportOptions) => Promise<ImportStats>
+  (db: FilterlyDb, opts: ImportOptions) => Promise<ImportStats>
 > = {
   'mcp-registry': importMcpRegistry,
   npm: importNpm,

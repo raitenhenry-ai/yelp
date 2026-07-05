@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { openDb, type ToolProofDb } from '../src/db.js';
+import { openDb, type FilterlyDb } from '../src/db.js';
 import { buildMcpServer } from '../src/mcp-server.js';
 import { generateReporterIdentity, signOutcome } from '../src/signing.js';
 import { outcome } from './helpers.js';
 
-let db: ToolProofDb;
+let db: FilterlyDb;
 let client: Client;
 
 beforeAll(async () => {
@@ -22,7 +22,7 @@ function text(result: unknown): string {
   return r.content.map((c) => c.text).join('\n');
 }
 
-describe('ToolProof MCP server', () => {
+describe('Filterly MCP server', () => {
   it('exposes the review tools', async () => {
     const tools = await client.listTools();
     const names = tools.tools.map((t) => t.name).sort();

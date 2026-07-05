@@ -5,12 +5,12 @@ import { generateReporterIdentity, type ReporterIdentity } from './signing.js';
 /**
  * Persistent reporter identity. The reporter_id is the agent's reputation —
  * losing the key means starting over, so it lives in a file (0600) rather
- * than memory. Default path can be overridden with TOOLPROOF_KEY.
+ * than memory. Default path can be overridden with FILTERLY_KEY.
  */
-export const DEFAULT_KEY_PATH = '.toolproof/identity.json';
+export const DEFAULT_KEY_PATH = '.filterly/identity.json';
 
 export function loadOrCreateIdentity(
-  path: string = process.env.TOOLPROOF_KEY ?? DEFAULT_KEY_PATH,
+  path: string = process.env.FILTERLY_KEY ?? DEFAULT_KEY_PATH,
 ): ReporterIdentity {
   if (existsSync(path)) {
     let identity: ReporterIdentity;

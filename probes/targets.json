@@ -12,9 +12,9 @@
       "checks": [
         {
           "tool": "echo",
-          "args": { "message": "toolproof-probe" },
+          "args": { "message": "filterly-probe" },
           "task_kind": "echo a message back",
-          "expect_substring": "toolproof-probe"
+          "expect_substring": "filterly-probe"
         },
         {
           "tool": "get-sum",
@@ -37,7 +37,7 @@
           "tool": "create_entities",
           "args": {
             "entities": [
-              { "name": "probe-entity", "entityType": "test", "observations": ["created by toolproof probe"] }
+              { "name": "probe-entity", "entityType": "test", "observations": ["created by filterly probe"] }
             ]
           },
           "task_kind": "store an entity in the knowledge graph"

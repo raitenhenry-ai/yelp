@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * The atom of ToolProof: a structured record of one real tool execution.
+ * The atom of Filterly: a structured record of one real tool execution.
  * This is what an agent emits after using a tool — not an opinion typed into
  * a text box, but a receipt of what actually happened.
  */

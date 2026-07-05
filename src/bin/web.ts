@@ -5,12 +5,12 @@ import { buildHttpServer } from '../http-server.js';
 const port = Number.parseInt(process.env.PORT ?? '4117', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 const db = await openDb();
-const server = buildHttpServer(db, process.env.TOOLPROOF_NAME ?? 'ToolProof');
-const backend = process.env.DATABASE_URL ? 'postgres' : (process.env.TOOLPROOF_DB ?? 'toolproof.db');
+const server = buildHttpServer(db, process.env.FILTERLY_NAME ?? 'Filterly');
+const backend = process.env.DATABASE_URL ? 'postgres' : (process.env.FILTERLY_DB ?? 'filterly.db');
 
 server.listen(port, host, () => {
   console.log(
-    `toolproof up on http://${host}:${port} — feed at /, MCP at /mcp, API at /api/* (db: ${backend})`,
+    `filterly up on http://${host}:${port} — feed at /, MCP at /mcp, API at /api/* (db: ${backend})`,
   );
 });
 
