@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FilterlyDb } from '../db.js';
 import { generateReporterIdentity, type ReporterIdentity } from '../signing.js';
 import { importMcpRegistry, importNpm } from '../import/sources.js';
+import { SEED_CATALOG } from './catalog.js';
 import type { ExecutionOutcome, StoredOutcome, ToolRecord } from '../types.js';
 
 /**
@@ -134,8 +135,25 @@ export async function bulkSeed(db: FilterlyDb, opts: BulkSeedOptions = {}): Prom
     log(`catalog now ${catalog} tools`);
   }
 
-  const tools: ToolRecord[] = await db.sampleTools(N_TOOLS);
-  if (tools.length === 0) throw new Error('no tools to review — import a catalog first');
+  // Guarantee we never come up empty: if the live import produced too few
+  // tools (registry unreachable, network policy, etc.), fall back to the
+  // bundled demo catalog so the leaderboard and feed always have content.
+  if (catalog < 15) {
+    log('falling back to the bundled demo catalog');
+    await db.bulkUpsertImportedTools(
+      SEED_CATALOG.map((p) => ({
+        tool_id: p.tool_id,
+        name: p.name,
+        category: p.category,
+        description: p.description,
+        homepage: p.homepage ?? null,
+      })),
+    );
+  }
+
+  let tools: ToolRecord[] = await db.sampleTools(N_TOOLS);
+  if (tools.length === 0) tools = await db.sampleTools(N_TOOLS, false);
+  if (tools.length === 0) throw new Error('no tools to review — catalog is empty');
 
   const REPORTERS: { label: string; kind: 'probe' | 'agent' }[] = [
     { label: 'seed-probe/us-east', kind: 'probe' },
