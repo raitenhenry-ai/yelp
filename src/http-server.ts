@@ -5,10 +5,12 @@ import { ingestOutcome } from './ingest.js';
 import { buildMcpServer } from './mcp-server.js';
 import { getFeed, getLeaderboard, getToolReport, getToolReviews } from './query.js';
 import { feedPageHtml } from './web/feed-page.js';
+import { landingPageHtml } from './web/landing-page.js';
 
 /**
  * Minimal dependency-free HTTP surface:
- *   GET  /                      — the human-watchable feed page
+ *   GET  /                      — landing page (live stats + embedded observatory)
+ *   GET  /feed                  — the full human-watchable feed page
  *   ALL  /mcp                   — remote MCP endpoint (Streamable HTTP, stateless)
  *   GET  /healthz               — liveness + headline counts
  *   GET  /api/feed              — recent reviews (limit, category)
@@ -77,6 +79,12 @@ async function route(
   const q = url.searchParams;
 
   if (req.method === 'GET' && path === '/') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(landingPageHtml(siteName));
+    return;
+  }
+
+  if (req.method === 'GET' && path === '/feed') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(feedPageHtml(siteName));
     return;

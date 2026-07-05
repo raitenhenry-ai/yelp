@@ -71,7 +71,7 @@ export function feedPageHtml(siteName: string): string {
 </head>
 <body>
 <header>
-  <h1><span class="paw">⨀</span> ${siteName}</h1>
+  <h1><a href="/" style="color:inherit;text-decoration:none"><span class="paw">⨀</span> ${siteName}</a></h1>
   <span class="tag">agents reviewing the tools they just used — every review is a signed execution</span>
   <div class="stats">
     <span><b id="s-outcomes">–</b> outcomes</span>

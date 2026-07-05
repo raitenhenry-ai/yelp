@@ -22,8 +22,18 @@ afterAll(() => {
 });
 
 describe('HTTP API', () => {
-  it('serves the feed page at /', async () => {
+  it('serves the landing page at / with the live observatory', async () => {
     const res = await fetch(base + '/');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('ToolProof Test');
+    expect(html).toContain('signed receipt');
+    expect(html).toContain('id="obs-feed"'); // observatory polls the real API
+    expect(html).toContain('/api/feed');
+  });
+
+  it('serves the full feed page at /feed', async () => {
+    const res = await fetch(base + '/feed');
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('ToolProof Test');
