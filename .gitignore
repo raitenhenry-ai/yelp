@@ -6,3 +6,8 @@ dist/
 *.db-shm
 .toolproof/
 *.log
+
+# transient QA/agent scratch scripts (keep the repo root clean)
+scratchpad*.mjs
+scratch*.mjs
+/*.tmp.*
