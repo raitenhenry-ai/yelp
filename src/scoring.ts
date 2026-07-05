@@ -27,7 +27,24 @@ export interface ScoringOptions {
   priorB: number;
   confidenceK: number;
   now: Date;
+  /**
+   * Global count of verified outcomes per reporter_id, across all tools.
+   * When supplied, each reporter's weight is scaled by a maturity factor that
+   * ramps from `maturityFloor` (a brand-new key) to 1.0 (~100 verified
+   * outcomes), so a swarm of fresh Sybil identities each posting one review
+   * carries far less than an established reporter. Omitted (undefined) ⇒ every
+   * reporter is treated as fully mature (multiplier 1.0), which keeps the pure
+   * scoreTool() function stable for callers that don't have global stats.
+   */
+  reputation?: Map<string, number>;
+  maturityFloor: number;
 }
+
+/** All unverified (unsigned) outcomes collapse to this single reporter bucket
+ * for share-cap purposes: an unauthenticated reporter_id is free to mint, so
+ * treating each as a distinct reporter would let a keyless attacker spray
+ * thousands of ids and evade the per-reporter cap entirely. */
+export const UNVERIFIED_REPORTER_BUCKET = '__unverified__';
 
 export const DEFAULT_SCORING: ScoringOptions = {
   halfLifeDays: 14,
@@ -37,7 +54,23 @@ export const DEFAULT_SCORING: ScoringOptions = {
   priorB: 1,
   confidenceK: 5,
   now: new Date(),
+  maturityFloor: 0.3,
 };
+
+/** Effective reporter identity for grouping: real key for verified outcomes,
+ * one shared bucket for all unverified ones. */
+function reporterKey(o: StoredOutcome): string {
+  return o.verified ? o.reporter_id : UNVERIFIED_REPORTER_BUCKET;
+}
+
+/** Reporter maturity multiplier in [maturityFloor, 1]. Ramps with the log of
+ * the reporter's global verified-outcome count; reaches 1.0 near 100. */
+function maturity(reporterId: string, opts: ScoringOptions): number {
+  if (!opts.reputation) return 1;
+  const count = opts.reputation.get(reporterId) ?? 0;
+  const ramp = Math.min(1, Math.log10(1 + count) / 2);
+  return opts.maturityFloor + (1 - opts.maturityFloor) * ramp;
+}
 
 interface WeightedOutcome {
   outcome: StoredOutcome;
@@ -62,47 +95,82 @@ function weighOutcomes(outcomes: StoredOutcome[], opts: ScoringOptions): Weighte
   const weighted: WeightedOutcome[] = outcomes.map((outcome) => ({
     outcome,
     weight:
-      recencyWeight(outcome.ts, opts) * (outcome.verified ? 1 : opts.unverifiedWeight),
+      recencyWeight(outcome.ts, opts) *
+      (outcome.verified ? 1 : opts.unverifiedWeight) *
+      maturity(reporterKey(outcome), opts),
     value: outcomeValue(outcome),
   }));
 
-  // Cap any single reporter's share of the FINAL total weight. Scaling a
-  // reporter down shrinks the total, which tightens the cap, so iterate to
-  // the fixed point (converges: at most two reporters can exceed a 40% share
-  // simultaneously, giving a contraction factor < 1).
-  // With few reporters a dominant share is expected (2 reporters ⇒ someone
-  // holds ≥50%), and capping would just flatten legitimate signal like the
-  // verified-vs-unverified weighting; so the cap relaxes to 2/n and only
-  // starts binding once a real crowd exists.
-  const reporters = new Set(weighted.map((w) => w.outcome.reporter_id));
-  const shareCap = Math.max(opts.reporterShareCap, 2 / reporters.size);
-  if (reporters.size >= 3 && shareCap < 1) {
-    for (let pass = 0; pass < 25; pass++) {
-      const byReporter = new Map<string, number>();
-      let total = 0;
-      for (const w of weighted) {
-        byReporter.set(
-          w.outcome.reporter_id,
-          (byReporter.get(w.outcome.reporter_id) ?? 0) + w.weight,
-        );
-        total += w.weight;
+  // Cap any single reporter's share of the FINAL total weight so one prolific
+  // reporter can't outvote the crowd. Grouping is by effective reporter key
+  // (all unverified outcomes share one bucket — see reporterKey). With few
+  // reporters a dominant share is expected (2 reporters ⇒ someone holds ≥50%),
+  // and capping would just flatten legitimate signal, so the cap relaxes to
+  // 2/n and only binds once a real crowd (≥3) exists.
+  const byReporter = new Map<string, number>();
+  for (const w of weighted) {
+    byReporter.set(reporterKey(w.outcome), (byReporter.get(reporterKey(w.outcome)) ?? 0) + w.weight);
+  }
+  const shareCap = Math.max(opts.reporterShareCap, 2 / byReporter.size);
+  if (byReporter.size >= 3 && shareCap < 1) {
+    const keys = [...byReporter.keys()];
+    const cappedShare = solveShareCap(
+      keys.map((k) => byReporter.get(k) as number),
+      shareCap,
+    );
+    if (cappedShare) {
+      const { threshold, cappedKeys } = cappedShare;
+      // Scale every outcome of a capped reporter so its group sums to threshold.
+      for (const idx of cappedKeys) {
+        const key = keys[idx];
+        const raw = byReporter.get(key) ?? 0;
+        if (raw <= 0) continue;
+        const scale = threshold / raw;
+        for (const w of weighted) if (reporterKey(w.outcome) === key) w.weight *= scale;
       }
-      if (total <= 0) break;
-      let violated = false;
-      for (const [reporter, sum] of byReporter) {
-        const cap = shareCap * total;
-        if (sum > cap * 1.001) {
-          violated = true;
-          const scale = cap / sum;
-          for (const w of weighted) {
-            if (w.outcome.reporter_id === reporter) w.weight *= scale;
-          }
-        }
-      }
-      if (!violated) break;
     }
   }
   return weighted;
+}
+
+/**
+ * Directly solve the per-reporter share cap's fixed point (water-filling)
+ * instead of iterating: capping a reporter shrinks the total, which tightens
+ * the cap on everyone else. Because shareCap ≥ 0.4, at most two reporters can
+ * exceed it simultaneously, so the solution is found in O(n log n).
+ *
+ * If the top k reporters are capped to weight `thr = shareCap·T` each and the
+ * rest keep raw weight S, then T = S/(1 − k·shareCap) and thr = shareCap·T.
+ * We find the smallest k such that the (k+1)-th reporter no longer exceeds thr.
+ */
+function solveShareCap(
+  weights: number[],
+  shareCap: number,
+): { threshold: number; cappedKeys: Set<number> } | null {
+  const total = weights.reduce((a, w) => a + w, 0);
+  if (total <= 0) return null;
+  // Track original indices so callers can map back to reporter keys.
+  const sorted = weights
+    .map((w, i) => ({ w, i }))
+    .sort((a, b) => b.w - a.w);
+  const eps = 1e-12;
+  let suffix = total;
+  for (let k = 1; k <= sorted.length; k++) {
+    suffix -= sorted[k - 1].w; // sum of reporters ranked k..n (uncapped)
+    const denom = 1 - k * shareCap;
+    if (denom <= eps) break; // can't cap this many without exceeding 100%
+    const T = suffix / denom;
+    const threshold = shareCap * T;
+    const kthNeedsCap = sorted[k - 1].w >= threshold - eps;
+    const nextIsUnderCap = k === sorted.length || sorted[k].w <= threshold + eps;
+    if (kthNeedsCap && nextIsUnderCap) {
+      // Only actually cap reporters whose raw weight exceeds the threshold.
+      const cappedKeys = new Set<number>();
+      for (let j = 0; j < k; j++) if (sorted[j].w > threshold + eps) cappedKeys.add(sorted[j].i);
+      return cappedKeys.size ? { threshold, cappedKeys } : null;
+    }
+  }
+  return null;
 }
 
 export function scoreTool(

@@ -3,7 +3,8 @@ import { SignedOutcomeSchema, type IngestResult, type SignedOutcome } from './ty
 import { verifyOutcome } from './signing.js';
 
 /**
- * Ingest pipeline: validate → verify signature → rate-cap → dedupe → store.
+ * Ingest pipeline: validate → verify signature → dedupe → rate-cap → clamp
+ * future ts → store.
  *
  * Unsigned outcomes are accepted but marked unverified — scoring weights them
  * at a fraction of verified ones. Signed outcomes must have a signature that
@@ -73,6 +74,16 @@ export function ingestOutcome(
       reason: 'rate limit: reporter daily cap reached',
       outcome_id: o.outcome_id,
     };
+  }
+
+  // Clamp a future-dated timestamp to now. `ts` is reporter-controlled and the
+  // recency half-life keys on it, so a far-future ts would otherwise lock in
+  // maximum, never-decaying weight and count as "recent" for trend forever.
+  // The signature has already been verified against the original ts above;
+  // clamping only affects how the stored outcome ages.
+  const FUTURE_SKEW_MS = 2 * 60_000;
+  if (new Date(o.ts).getTime() > Date.now() + FUTURE_SKEW_MS) {
+    o.ts = new Date().toISOString();
   }
 
   db.ensureReporter(o.reporter_id, { public_key: signed.public_key ?? null });

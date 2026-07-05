@@ -112,6 +112,35 @@ describe('ToolProofClient', () => {
     expect(res.reason).toMatch(/network/);
   });
 
+  it('getToolReport returns null for an unknown tool (F2), not a throw', async () => {
+    const tp = new ToolProofClient({ baseUrl: base });
+    await expect(tp.getToolReport('mcp:nope/never')).resolves.toBeNull();
+  });
+
+  it('distinct identity-less clients get distinct anonymous reporter_ids (F1)', async () => {
+    const a = new ToolProofClient({ baseUrl: base });
+    const b = new ToolProofClient({ baseUrl: base });
+    const ra = await a.reportOutcome({
+      tool_id: 'mcp:anon/a',
+      category: 'testing',
+      task_kind: 'anon a',
+      status: 'success',
+      latency_ms: 1,
+    });
+    const rb = await b.reportOutcome({
+      tool_id: 'mcp:anon/a',
+      category: 'testing',
+      task_kind: 'anon b',
+      status: 'success',
+      latency_ms: 1,
+    });
+    expect(ra.accepted && rb.accepted).toBe(true);
+    await waitFor(() => db.outcomesForTool('mcp:anon/a').length === 2);
+    const ids = new Set(db.outcomesForTool('mcp:anon/a').map((o) => o.reporter_id));
+    expect(ids.size).toBe(2);
+    for (const id of ids) expect(id.startsWith('anon-')).toBe(true);
+  });
+
   it('unsigned client reports land as unverified', async () => {
     const tp = new ToolProofClient({ baseUrl: base });
     const res = await tp.reportOutcome({

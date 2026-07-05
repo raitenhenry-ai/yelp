@@ -29,16 +29,36 @@ export function getToolReviews(
   scoring: Partial<ScoringOptions> = {},
 ): ToolReview[] {
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
-  const tools = db.listTools(params.category);
   const needle = params.capability?.toLowerCase().trim();
+  const scoringOpts: Partial<ScoringOptions> = { reputation: db.reporterReputation(), ...scoring };
+
+  // Candidate set: rated tools always (there are few, even in a 20k catalog);
+  // unrated pages only when explicitly requested, and then bounded by a SQL
+  // search so a reviews query never scans the whole catalog (the default path
+  // already excluded unrated tools, so this is behavior-preserving + fast).
+  const candidates = new Map<string, ReturnType<typeof db.getTool>>();
+  for (const id of db.ratedToolIds(params.category)) {
+    const t = db.getTool(id);
+    if (t) candidates.set(id, t);
+  }
+  if (params.include_unrated) {
+    for (const t of db.searchTools({
+      q: params.capability,
+      category: params.category,
+      limit: 500,
+    })) {
+      if (!candidates.has(t.tool_id)) candidates.set(t.tool_id, t);
+    }
+  }
 
   const scored: (ToolReview & { match: number })[] = [];
-  for (const tool of tools) {
+  for (const tool of candidates.values()) {
+    if (!tool) continue;
     const outcomes = db.outcomesForTool(tool.tool_id);
     const match = needle ? matchScore(needle, tool, outcomes) : 1;
     if (needle && match === 0) continue;
     if (!params.include_unrated && outcomes.length === 0) continue;
-    const s = scoreTool(tool, outcomes, scoring);
+    const s = scoreTool(tool, outcomes, scoringOpts);
     scored.push({
       ...s,
       match,
@@ -72,7 +92,7 @@ export function getToolReport(
   const tool = db.getTool(tool_id);
   if (!tool) return null;
   const outcomes = db.outcomesForTool(tool_id);
-  const s = scoreTool(tool, outcomes, scoring);
+  const s = scoreTool(tool, outcomes, { reputation: db.reporterReputation(), ...scoring });
   return {
     ...s,
     summary: summaryForTool(s),
@@ -96,11 +116,12 @@ export function getLeaderboard(
 ): ToolScore[] {
   // Only rated tools — with an imported catalog of thousands of unreviewed
   // pages, scoring every row would be wasted work.
+  const scoringOpts: Partial<ScoringOptions> = { reputation: db.reporterReputation(), ...scoring };
   const scored = db
     .ratedToolIds(category)
     .map((id) => {
       const tool = db.getTool(id);
-      return tool ? scoreTool(tool, db.outcomesForTool(id), scoring) : null;
+      return tool ? scoreTool(tool, db.outcomesForTool(id), scoringOpts) : null;
     })
     .filter((s): s is ToolScore => s !== null);
   scored.sort((a, b) => b.rank_score - a.rank_score);
@@ -136,6 +157,10 @@ export function getDirectory(
   const pages = Math.max(1, Math.ceil(total / perPage));
   const page = Math.min(Math.max(params.page ?? 1, 1), pages);
   const rows = db.searchTools({ ...params, limit: perPage, offset: (page - 1) * perPage });
+  // Only pull the reputation map if this page actually has rated tools to score.
+  const scoringOpts: Partial<ScoringOptions> = rows.some((t) => t.n_outcomes > 0)
+    ? { reputation: db.reporterReputation(), ...scoring }
+    : scoring;
   const entries: DirectoryEntry[] = rows.map((t) => ({
     tool_id: t.tool_id,
     name: t.name,
@@ -143,7 +168,7 @@ export function getDirectory(
     description: t.description,
     homepage: t.homepage,
     n_outcomes: t.n_outcomes,
-    score: t.n_outcomes > 0 ? scoreTool(t, db.outcomesForTool(t.tool_id), scoring) : undefined,
+    score: t.n_outcomes > 0 ? scoreTool(t, db.outcomesForTool(t.tool_id), scoringOpts) : undefined,
   }));
   return { entries, total, page, pages, per_page: perPage };
 }

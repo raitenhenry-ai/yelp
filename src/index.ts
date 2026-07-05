@@ -8,3 +8,5 @@ export * from './ingest.js';
 export * from './query.js';
 export * from './identity.js';
 export * from './client.js';
+export * from './catalog.js';
+export * from './import/sources.js';

@@ -13,9 +13,14 @@ export function loadOrCreateIdentity(
   path: string = process.env.TOOLPROOF_KEY ?? DEFAULT_KEY_PATH,
 ): ReporterIdentity {
   if (existsSync(path)) {
-    const identity = JSON.parse(readFileSync(path, 'utf8')) as ReporterIdentity;
+    let identity: ReporterIdentity;
+    try {
+      identity = JSON.parse(readFileSync(path, 'utf8')) as ReporterIdentity;
+    } catch {
+      throw new Error(`identity file ${path} is malformed (not valid JSON)`);
+    }
     if (!identity.reporter_id || !identity.public_key || !identity.private_key) {
-      throw new Error(`identity file ${path} is malformed`);
+      throw new Error(`identity file ${path} is malformed (missing key fields)`);
     }
     return identity;
   }

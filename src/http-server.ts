@@ -43,13 +43,23 @@ export function buildHttpServer(db: ToolProofDb, siteName = 'ToolProof'): Server
 /**
  * Stateless remote MCP: each request gets a fresh server + transport pair
  * (cheap — no I/O at construction), so any load balancer works and no session
- * affinity is needed. GET/DELETE get the spec-mandated 405 from the SDK.
+ * affinity is needed. Only POST carries JSON-RPC; because the server is
+ * stateless there is no SSE stream or session to GET/DELETE, so we answer
+ * those with 405 (rather than leaving an idle event-stream open per GET).
  */
 async function handleMcp(
   db: ToolProofDb,
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'method not allowed; POST JSON-RPC to /mcp' }));
+    return;
+  }
+  const parsed = await readJsonBody(req, res, 256 * 1024);
+  if (!parsed.ok) return;
+  const body = parsed.value;
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -60,16 +70,6 @@ async function handleMcp(
     void server.close();
   });
   await server.connect(transport);
-  let body: unknown;
-  if (req.method === 'POST') {
-    const raw = await readBody(req, 256 * 1024);
-    try {
-      body = raw ? JSON.parse(raw) : undefined;
-    } catch {
-      sendJson(res, 400, { error: 'invalid JSON body' });
-      return;
-    }
-  }
   await transport.handleRequest(req, res, body);
 }
 
@@ -115,7 +115,11 @@ async function route(
   }
 
   if (req.method === 'GET' && path.startsWith('/tool/')) {
-    const toolId = decodeURIComponent(path.slice('/tool/'.length));
+    const toolId = safeDecode(path.slice('/tool/'.length));
+    if (toolId === null) {
+      sendJson(res, 400, { error: 'malformed tool id encoding' });
+      return;
+    }
     if (!toolId || toolId.length > 256) {
       sendJson(res, 404, { error: 'bad tool id' });
       return;
@@ -200,7 +204,11 @@ async function route(
   }
 
   if (req.method === 'GET' && path.startsWith('/api/tools/')) {
-    const toolId = decodeURIComponent(path.slice('/api/tools/'.length));
+    const toolId = safeDecode(path.slice('/api/tools/'.length));
+    if (toolId === null) {
+      sendJson(res, 400, { error: 'malformed tool id encoding' });
+      return;
+    }
     const report = getToolReport(db, toolId);
     if (!report) {
       sendJson(res, 404, { error: `unknown tool_id: ${toolId}` });
@@ -252,20 +260,44 @@ async function route(
   }
 
   if (req.method === 'POST' && path === '/api/outcomes') {
-    const body = await readBody(req, 64 * 1024);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(body);
-    } catch {
-      sendJson(res, 400, { error: 'invalid JSON body' });
-      return;
-    }
-    const result = ingestOutcome(db, parsed);
+    const parsed = await readJsonBody(req, res, 64 * 1024);
+    if (!parsed.ok) return;
+    const result = ingestOutcome(db, parsed.value);
     sendJson(res, result.accepted ? 201 : 422, result);
     return;
   }
 
+  // Known path, wrong method → 405 with Allow (rather than a generic 404).
+  const allowed = allowedMethods(path);
+  if (allowed) {
+    res.writeHead(405, { allow: allowed, 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: `method not allowed; try ${allowed}` }));
+    return;
+  }
+
   sendJson(res, 404, { error: 'not found' });
+}
+
+/** The methods a known route accepts, or null if the path isn't a route. */
+function allowedMethods(path: string): string | null {
+  if (path === '/api/outcomes') return 'POST';
+  if (
+    path === '/' ||
+    path === '/feed' ||
+    path === '/tools' ||
+    path === '/healthz' ||
+    path === '/api/feed' ||
+    path === '/api/tools' ||
+    path === '/api/directory' ||
+    path === '/api/leaderboard' ||
+    path === '/api/categories' ||
+    path === '/api/stats' ||
+    path.startsWith('/tool/') ||
+    path.startsWith('/api/tools/')
+  ) {
+    return 'GET';
+  }
+  return null;
 }
 
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
@@ -284,20 +316,73 @@ function intParam(q: URLSearchParams, name: string, dflt: number, max: number): 
   return Number.isFinite(n) ? Math.min(Math.max(n, 1), max) : dflt;
 }
 
+class PayloadTooLargeError extends Error {
+  constructor() {
+    super('request body too large');
+  }
+}
+
 function readBody(req: IncomingMessage, maxBytes: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
-    req.on('data', (chunk: Buffer) => {
+    let done = false;
+    const onData = (chunk: Buffer) => {
+      if (done) return;
       size += chunk.length;
       if (size > maxBytes) {
-        reject(new Error('body too large'));
-        req.destroy();
+        done = true;
+        req.off('data', onData);
+        // Pause rather than destroy: destroying here kills the socket before
+        // the handler can write a 413, so the client sees an empty reply. The
+        // handler decides how to end the connection after responding.
+        req.pause();
+        reject(new PayloadTooLargeError());
         return;
       }
       chunks.push(chunk);
+    };
+    req.on('data', onData);
+    req.on('end', () => {
+      if (!done) resolve(Buffer.concat(chunks).toString('utf8'));
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
+}
+
+/** Read a JSON body, sending the right error response on failure. Returns a
+ * sentinel so the caller knows to stop. */
+async function readJsonBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+  maxBytes: number,
+): Promise<{ ok: true; value: unknown } | { ok: false }> {
+  let raw: string;
+  try {
+    raw = await readBody(req, maxBytes);
+  } catch (err) {
+    if (err instanceof PayloadTooLargeError) {
+      sendJson(res, 413, { error: `request body too large (max ${maxBytes} bytes)` });
+      req.destroy();
+    } else {
+      sendJson(res, 400, { error: 'error reading request body' });
+    }
+    return { ok: false };
+  }
+  try {
+    return { ok: true, value: raw ? JSON.parse(raw) : undefined };
+  } catch {
+    sendJson(res, 400, { error: 'invalid JSON body' });
+    return { ok: false };
+  }
+}
+
+/** Decode a percent-encoded path segment, or null if it's malformed (so the
+ * caller can answer 400 instead of surfacing a URIError as a 500). */
+function safeDecode(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
 }

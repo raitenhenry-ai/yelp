@@ -1,6 +1,6 @@
 import type { ToolReport } from '../query.js';
 import type { ToolRecord } from '../types.js';
-import { agoHtml, esc, fmtMs, pageShell, starsHtml, toolHref } from './shared.js';
+import { agoHtml, esc, fmtMs, pageShell, safeHref, starsHtml, toolHref } from './shared.js';
 
 const CSS = `
   .head { padding: 44px 0 10px; display: flex; gap: 20px; align-items: baseline; flex-wrap: wrap; }
@@ -95,7 +95,7 @@ ${data.failureBreakdown
   </div>
   <div class="idline">
     <span class="mono">${esc(r.tool_id)}</span>
-    ${r.homepage ? `<a href="${esc(r.homepage)}" rel="nofollow noopener">homepage ↗</a>` : ''}
+    ${safeHref(r.homepage) ? `<a href="${esc(safeHref(r.homepage))}" rel="nofollow noopener">homepage ↗</a>` : ''}
     <a href="/api/tools/${encodeURIComponent(r.tool_id)}">raw evidence (json)</a>
     <span>page since ${agoHtml(r.first_seen)}</span>
   </div>

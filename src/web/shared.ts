@@ -35,6 +35,28 @@ export function toolHref(tool_id: string): string {
   return `/tool/${encodeURIComponent(tool_id)}`;
 }
 
+/**
+ * Only allow http(s) URLs as link targets. Homepage values come from the
+ * import pipeline (registry/npm), which is externally controlled, so a
+ * `javascript:` (or `data:`, etc.) URL must never become a live href. Returns
+ * a safe href string, or null if the value isn't a plain web URL.
+ */
+export function safeHref(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  // Reject embedded control chars / whitespace (0x00-0x20) that could smuggle
+  // a scheme past URL parsing.
+  if (/[\x00-\x20]/.test(trimmed)) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  return parsed.href;
+}
+
 export const BASE_CSS = `
   :root {
     --bg: #0b0e14; --bg2: #0d1117; --panel: #131822; --panel2: #161d29;

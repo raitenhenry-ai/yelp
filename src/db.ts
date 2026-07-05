@@ -171,6 +171,20 @@ export class ToolProofDb {
     })[];
   }
 
+  /**
+   * Global count of verified outcomes per reporter, across all tools — feeds
+   * the scoring maturity factor so a swarm of fresh Sybil keys weighs less
+   * than an established reporter. One query, cached by the caller per request.
+   */
+  reporterReputation(): Map<string, number> {
+    const rows = this.db
+      .prepare('SELECT reporter_id, COUNT(*) AS n FROM outcomes WHERE verified = 1 GROUP BY reporter_id')
+      .all() as unknown as { reporter_id: string; n: number }[];
+    const map = new Map<string, number>();
+    for (const r of rows) map.set(r.reporter_id, r.n);
+    return map;
+  }
+
   /** Only tools that actually have outcomes — keeps the leaderboard cheap at catalog scale. */
   ratedToolIds(category?: string): string[] {
     const rows = category

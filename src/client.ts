@@ -48,11 +48,16 @@ export class ToolProofClient {
   private readonly baseUrl: string;
   private readonly identity?: ReporterIdentity;
   private readonly fetchFn: typeof fetch;
+  /** Fallback reporter id for identity-less clients: unique per instance so
+   * distinct anonymous clients don't all merge into one shared 'anonymous'
+   * bucket (these reports are unverified and low-weight regardless). */
+  private readonly anonReporterId: string;
 
   constructor(opts: ToolProofClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, '');
     this.identity = opts.identity;
     this.fetchFn = opts.fetchFn ?? fetch;
+    this.anonReporterId = `anon-${randomUUID()}`;
   }
 
   async getToolReviews(params: {
@@ -68,8 +73,13 @@ export class ToolProofClient {
     return (body as { results: ToolReview[] }).results;
   }
 
-  async getToolReport(toolId: string): Promise<ToolReport> {
-    return (await this.get(`/api/tools/${encodeURIComponent(toolId)}`)) as ToolReport;
+  /** Full report for a tool, or null if the server has no such tool (404) —
+   * mirrors the library's getToolReport, which returns null for unknown ids. */
+  async getToolReport(toolId: string): Promise<ToolReport | null> {
+    const res = await this.fetchFn(`${this.baseUrl}/api/tools/${encodeURIComponent(toolId)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`toolproof: GET /api/tools/${toolId} → ${res.status}`);
+    return (await res.json()) as ToolReport;
   }
 
   async getLeaderboard(category?: string, limit?: number): Promise<ToolScore[]> {
@@ -96,7 +106,7 @@ export class ToolProofClient {
     const full: ExecutionOutcome = {
       outcome_id: outcome.outcome_id ?? randomUUID(),
       ts: outcome.ts ?? new Date().toISOString(),
-      reporter_id: outcome.reporter_id ?? this.identity?.reporter_id ?? 'anonymous',
+      reporter_id: outcome.reporter_id ?? this.identity?.reporter_id ?? this.anonReporterId,
       ...outcome,
     } as ExecutionOutcome;
     const payload = this.identity ? signOutcome(full, this.identity) : { outcome: full };

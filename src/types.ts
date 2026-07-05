@@ -40,8 +40,9 @@ export const ExecutionOutcomeSchema = z.object({
   latency_ms: z.number().min(0).max(24 * 3600 * 1000),
   cost_usd: z.number().min(0).optional(),
   /**
-   * Reporter identity = SHA-256 fingerprint (hex) of the reporter's Ed25519
-   * public key (SPKI DER). Enforced to match the signing key on ingest.
+   * Reporter identity = first 40 hex chars of the SHA-256 fingerprint of the
+   * reporter's Ed25519 public key (SPKI DER); see PROTOCOL.md §3. Enforced to
+   * match the signing key on ingest.
    */
   reporter_id: z.string().min(8).max(128),
   /** ISO-8601 timestamp of the execution. */

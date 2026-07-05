@@ -69,15 +69,32 @@ but yourself.
 
 ## 4. Canonical JSON
 
-The signature covers the canonical serialization of the outcome object:
+The signature covers the canonical serialization of the outcome object. To
+interoperate across languages, an implementation MUST produce exactly these
+bytes:
 
 1. Drop every field whose value is `undefined`/absent.
-2. Sort object keys lexicographically, at every depth.
-3. Serialize with no insignificant whitespace (`JSON.stringify` semantics).
-4. Non-finite numbers are illegal.
+2. Sort object keys lexicographically (by UTF-16 code unit), at every depth.
+3. No insignificant whitespace: separators are exactly `,` and `:` (no spaces).
+4. Emit strings as UTF-8 with only the mandatory JSON escapes (`"`, `\`, and
+   control chars < 0x20). Do **not** `\u`-escape non-ASCII — a `notes` value of
+   `café` serializes as the raw bytes `café`, not `café`.
+5. Numbers use ECMAScript `Number`-to-string form (e.g. `1e-7`, not `1e-07`).
+6. Non-finite numbers are illegal.
 
-This matches the spirit of RFC 8785 (JCS) for the subset of JSON the schema
-allows.
+This is RFC 8785 (JCS). The reference `canonicalJson` (`src/canonical.ts`) is a
+conforming encoder.
+
+**Cross-language note.** Items 4 and 5 are where naive stdlib serializers
+diverge:
+
+- **Python** `json.dumps(obj, sort_keys=True, separators=(",", ":"),
+  ensure_ascii=False)` matches items 1–4. It does **not** match item 5 for
+  floats (`json.dumps(1e-7)` → `1e-07`). The outcome schema's only float is the
+  optional `cost_usd`; for guaranteed interop, either omit it or send integer
+  minor units, so every remaining field (strings, integers, enums) serializes
+  identically. All other fields are safe.
+- Prefer a dedicated JCS/RFC-8785 library when one is available.
 
 ## 5. Signature envelope
 

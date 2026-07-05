@@ -11,7 +11,8 @@ import { canonicalJson } from './canonical.js';
 import type { ExecutionOutcome, SignedOutcome } from './types.js';
 
 export interface ReporterIdentity {
-  /** SHA-256 hex fingerprint of the SPKI DER public key. This is the reporter_id. */
+  /** reporter_id = first 40 hex chars of the SHA-256 fingerprint of the SPKI
+   * DER public key (see PROTOCOL.md §3). */
   reporter_id: string;
   /** Base64 SPKI DER Ed25519 public key. */
   public_key: string;

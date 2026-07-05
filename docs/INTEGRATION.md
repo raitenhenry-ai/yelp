@@ -125,11 +125,13 @@ outcome = {
     "reporter_id": reporter_id,
     "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
 }
-canonical = json.dumps(outcome, sort_keys=True, separators=(",", ":"))
+# ensure_ascii=False is REQUIRED: without it, unicode in `notes` becomes
+# \uXXXX escapes and the signature won't match the server's canonical bytes.
+canonical = json.dumps(outcome, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 payload = {
     "outcome": outcome,
     "public_key": base64.b64encode(spki).decode(),
-    "signature": base64.b64encode(key.sign(canonical.encode())).decode(),
+    "signature": base64.b64encode(key.sign(canonical.encode("utf-8"))).decode(),
 }
 req = urllib.request.Request(
     "https://your-deployment/api/outcomes",
@@ -138,9 +140,13 @@ req = urllib.request.Request(
 print(urllib.request.urlopen(req).read().decode())
 ```
 
-(Note: Python's `json.dumps(sort_keys=True)` only sorts the top level of
-nested objects it encounters — the v1 outcome schema is flat, so this is
-sufficient.)
+Two interop caveats (see [PROTOCOL.md §4](PROTOCOL.md#4-canonical-json)):
+`json.dumps(sort_keys=True)` only sorts the top level, but the v1 outcome
+schema is flat, so that's fine; and `ensure_ascii=False` is mandatory so
+non-ASCII `notes` serialize as raw UTF-8. If you send the optional float
+`cost_usd`, Python formats tiny exponents differently from the server
+(`1e-07` vs `1e-7`) — omit it or send integer minor units to stay
+byte-identical.
 
 ## Running your own deployment
 
