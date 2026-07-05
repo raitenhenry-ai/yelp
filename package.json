@@ -13,7 +13,8 @@
     "filterly-probe": "dist/bin/probe.js",
     "filterly-seed": "dist/bin/seed.js",
     "filterly-keys": "dist/bin/keys.js",
-    "filterly-import": "dist/bin/import.js"
+    "filterly-import": "dist/bin/import.js",
+    "filterly-bulkseed": "dist/bin/bulkseed.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -39,7 +40,8 @@
     "seed": "tsx src/bin/seed.ts",
     "probe": "tsx src/bin/probe.ts",
     "keys": "tsx src/bin/keys.ts",
-    "import": "tsx src/bin/import.ts"
+    "import": "tsx src/bin/import.ts",
+    "bulkseed": "tsx src/bin/bulkseed.ts"
   },
   "keywords": [
     "mcp",
@@ -51,6 +53,7 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@neondatabase/serverless": "^1.1.0",
     "pg": "^8.22.0",
     "zod": "^3.25.0"
   },

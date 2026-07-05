@@ -103,6 +103,58 @@ export class FilterlyDb {
   }
 
   /**
+   * Batch version of registerImportedTool: create-or-enrich many tools in a few
+   * multi-row upserts (same no-clobber semantics — existing name/description/
+   * curated category are preserved). Returns created/updated counts. Much faster
+   * than per-row, especially over the Neon HTTP transport.
+   */
+  async bulkUpsertImportedTools(
+    tools: {
+      tool_id: string;
+      name: string;
+      category: string;
+      description: string;
+      homepage?: string | null;
+    }[],
+  ): Promise<{ created: number; updated: number }> {
+    if (tools.length === 0) return { created: 0, updated: 0 };
+    // Dedupe within the batch (registry can repeat) and find which pre-exist.
+    const byId = new Map(tools.map((t) => [t.tool_id, t]));
+    const unique = [...byId.values()];
+    const existing = new Set<string>();
+    const IN_CHUNK = 500;
+    for (let i = 0; i < unique.length; i += IN_CHUNK) {
+      const ids = unique.slice(i, i + IN_CHUNK).map((t) => t.tool_id);
+      const rows = await this.driver.all<{ tool_id: string }>(
+        `SELECT tool_id FROM tools WHERE tool_id IN (${ids.map(() => '?').join(',')})`,
+        ids,
+      );
+      for (const r of rows) existing.add(r.tool_id);
+    }
+    const now = new Date().toISOString();
+    const CHUNK = 300;
+    for (let i = 0; i < unique.length; i += CHUNK) {
+      const chunk = unique.slice(i, i + CHUNK);
+      const tuples = chunk.map(() => '(?,?,?,?,?,?)').join(',');
+      const params: unknown[] = [];
+      for (const t of chunk) {
+        params.push(t.tool_id, t.name, t.category, t.description, t.homepage ?? null, now);
+      }
+      await this.driver.run(
+        `INSERT INTO tools (tool_id, name, category, description, homepage, first_seen)
+         VALUES ${tuples}
+         ON CONFLICT(tool_id) DO UPDATE SET
+           description = CASE WHEN tools.description = '' THEN excluded.description ELSE tools.description END,
+           homepage    = COALESCE(tools.homepage, excluded.homepage),
+           category    = CASE WHEN tools.category = 'uncategorized' THEN excluded.category ELSE tools.category END`,
+        params,
+      );
+    }
+    const created = unique.filter((t) => !existing.has(t.tool_id)).length;
+    return { created, updated: unique.length - created };
+  }
+
+  /**
    * Register a tool from a catalog import: creates the page if new, and only
    * fills in description/homepage/category where they're missing — an import
    * never clobbers a curated record or a category chosen by real reviews.
@@ -291,6 +343,45 @@ export class FilterlyDb {
         outcome.session_fingerprint ?? null,
         outcome.notes ?? null,
       ],
+    );
+  }
+
+  /**
+   * Insert many outcomes in a few multi-row statements (dedup via ON CONFLICT).
+   * Bypasses the ingest pipeline's per-outcome verification/rate checks — for
+   * trusted bulk loads (seeding, backfills), not the public submit path.
+   */
+  async bulkInsertOutcomes(rows: { outcome: ExecutionOutcome; verified: boolean }[]): Promise<void> {
+    const CHUNK = 300; // 300 * 15 cols = 4500 params, well under Postgres' 65535
+    const now = new Date().toISOString();
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      const tuples = chunk.map(() => `(${Array(15).fill('?').join(',')})`).join(',');
+      const params: unknown[] = [];
+      for (const { outcome: o, verified } of chunk) {
+        params.push(
+          o.outcome_id, o.tool_id, o.reporter_id, o.ts, now, o.status,
+          o.failure_mode ?? null, o.quality ?? null, o.latency_ms, o.cost_usd ?? null,
+          o.category, o.task_kind, verified ? 1 : 0, o.session_fingerprint ?? null, o.notes ?? null,
+        );
+      }
+      await this.driver.run(
+        `INSERT INTO outcomes (
+           outcome_id, tool_id, reporter_id, ts, received_at, status, failure_mode,
+           quality, latency_ms, cost_usd, category, task_kind, verified,
+           session_fingerprint, notes
+         ) VALUES ${tuples} ON CONFLICT(outcome_id) DO NOTHING`,
+        params,
+      );
+    }
+  }
+
+  /** A random sample of tools, preferring ones with a description (for seeding). */
+  async sampleTools(limit: number, withDescription = true): Promise<ToolRecord[]> {
+    const where = withDescription ? "WHERE description != ''" : '';
+    return this.driver.all<ToolRecord>(
+      `SELECT * FROM tools ${where} ORDER BY RANDOM() LIMIT ?`,
+      [limit],
     );
   }
 

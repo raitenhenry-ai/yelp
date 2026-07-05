@@ -127,15 +127,62 @@ export class PgDriver implements Driver {
 }
 
 /**
+/**
+ * Neon serverless HTTP driver — speaks the same `pg` dialect but runs each
+ * query as an HTTPS request (port 443) via @neondatabase/serverless instead of
+ * a raw Postgres TCP connection (5432). Use it for serverless/edge runtimes, or
+ * any environment where outbound 5432 is blocked. Enable with FILTERLY_NEON_HTTP=1.
+ */
+export class NeonHttpDriver implements Driver {
+  readonly dialect = 'pg' as const;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private readonly sql: (text: string, params?: unknown[]) => Promise<any[]>;
+
+  private constructor(sql: (text: string, params?: unknown[]) => Promise<unknown[]>) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.sql = sql as any;
+  }
+
+  static async connect(connectionString: string): Promise<NeonHttpDriver> {
+    const { neon } = await import('@neondatabase/serverless');
+    const client = neon(connectionString);
+    return new NeonHttpDriver((text, params) => client.query(text, params ?? []));
+  }
+
+  async all<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
+    return (await this.sql(toPgPlaceholders(sql), params)) as T[];
+  }
+
+  async run(sql: string, params: unknown[] = []): Promise<void> {
+    await this.sql(toPgPlaceholders(sql), params);
+  }
+
+  async exec(sql: string): Promise<void> {
+    // The HTTP endpoint runs one statement per request, so split DDL scripts.
+    for (const stmt of sql.split(';')) {
+      const trimmed = stmt.trim();
+      if (trimmed) await this.sql(trimmed, []);
+    }
+  }
+
+  async close(): Promise<void> {
+    /* HTTP driver holds no persistent connection */
+  }
+}
+
+/**
  * Open the driver selected by configuration: Postgres when DATABASE_URL is set
  * (Neon/Railway), otherwise SQLite at the given path. Explicit `spec` overrides
  * env — pass a `postgres://`/`postgresql://` URL for pg, or a file path /
- * `:memory:` for sqlite.
+ * `:memory:` for sqlite. Set FILTERLY_NEON_HTTP=1 to use Neon's serverless HTTP
+ * transport instead of a TCP connection.
  */
 export async function openDriver(spec?: string): Promise<Driver> {
   const target = spec ?? process.env.DATABASE_URL ?? process.env.FILTERLY_DB ?? 'filterly.db';
   if (/^postgres(ql)?:\/\//i.test(target)) {
-    return PgDriver.connect(target);
+    return process.env.FILTERLY_NEON_HTTP === '1'
+      ? NeonHttpDriver.connect(target)
+      : PgDriver.connect(target);
   }
   return new SqliteDriver(target);
 }

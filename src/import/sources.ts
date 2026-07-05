@@ -85,6 +85,7 @@ export async function importMcpRegistry(
       metadata?: { nextCursor?: string };
     };
 
+    const batch: Parameters<typeof db.bulkUpsertImportedTools>[0] = [];
     for (const entry of body.servers ?? []) {
       stats.seen++;
       const server = entry.server ?? (entry as RegistryEntry['server']);
@@ -97,15 +98,17 @@ export async function importMcpRegistry(
       // like "io.github.owner/repo", and the namespace would otherwise drag
       // every tool into the github/devops bucket.
       const shortName = server.name.split('/').pop() ?? server.name;
-      const created = await db.registerImportedTool({
+      batch.push({
         tool_id: `mcp:${server.name}`,
         name: server.title || server.name,
         category: categorizeText(`${shortName} ${server.title ?? ''} ${description}`),
         description,
         homepage: server.websiteUrl ?? server.repository?.url ?? null,
       });
-      created ? stats.created++ : stats.updated++;
     }
+    const upserted = await db.bulkUpsertImportedTools(batch);
+    stats.created += upserted.created;
+    stats.updated += upserted.updated;
 
     cursor = body.metadata?.nextCursor;
     if (!cursor || (body.servers ?? []).length === 0) break;
@@ -143,20 +146,23 @@ export async function importNpm(db: FilterlyDb, opts: ImportOptions = {}): Promi
     const objects = body.objects ?? [];
     if (objects.length === 0) break;
 
+    const batch: Parameters<typeof db.bulkUpsertImportedTools>[0] = [];
     for (const obj of objects) {
       stats.seen++;
       const pkg = obj.package;
       if (!pkg?.name) continue;
       const description = (pkg.description ?? '').slice(0, 500);
-      const created = await db.registerImportedTool({
+      batch.push({
         tool_id: `mcp:npm/${pkg.name}`,
         name: pkg.name,
         category: categorizeText(`${pkg.name} ${description}`),
         description,
         homepage: pkg.links?.homepage ?? pkg.links?.repository ?? pkg.links?.npm ?? null,
       });
-      created ? stats.created++ : stats.updated++;
     }
+    const upserted = await db.bulkUpsertImportedTools(batch);
+    stats.created += upserted.created;
+    stats.updated += upserted.updated;
 
     from += objects.length;
     log(`  …${stats.seen} packages (${stats.created} new pages)`);
