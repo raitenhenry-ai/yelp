@@ -1,0 +1,114 @@
+{
+  "$comment": "Probe targets: real MCP servers spawned over stdio. Each check is a canned task whose outcome is recorded, signed, and ingested. Add targets category by category.",
+  "targets": [
+    {
+      "tool_id": "mcp:io.modelcontextprotocol/everything",
+      "name": "Everything (reference server)",
+      "category": "reference",
+      "description": "MCP reference server exercising every protocol feature — echo, add, sampling, etc.",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"],
+      "checks": [
+        {
+          "tool": "echo",
+          "args": { "message": "toolproof-probe" },
+          "task_kind": "echo a message back",
+          "expect_substring": "toolproof-probe"
+        },
+        {
+          "tool": "get-sum",
+          "args": { "a": 17, "b": 25 },
+          "task_kind": "add two numbers",
+          "expect_substring": "42"
+        }
+      ]
+    },
+    {
+      "tool_id": "mcp:io.modelcontextprotocol/memory",
+      "name": "Memory (knowledge graph)",
+      "category": "memory",
+      "description": "Official knowledge-graph memory server: entities, relations, observations.",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "checks": [
+        {
+          "tool": "create_entities",
+          "args": {
+            "entities": [
+              { "name": "probe-entity", "entityType": "test", "observations": ["created by toolproof probe"] }
+            ]
+          },
+          "task_kind": "store an entity in the knowledge graph"
+        },
+        {
+          "tool": "read_graph",
+          "args": {},
+          "task_kind": "read the knowledge graph",
+          "expect_substring": "entities"
+        }
+      ]
+    },
+    {
+      "tool_id": "mcp:io.modelcontextprotocol/filesystem",
+      "name": "Filesystem",
+      "category": "filesystem",
+      "description": "Official filesystem server: read, write, list, search files under allowed roots.",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "checks": [
+        {
+          "tool": "list_directory",
+          "args": { "path": "/tmp" },
+          "task_kind": "list a directory"
+        },
+        {
+          "tool": "list_allowed_directories",
+          "args": {},
+          "task_kind": "report allowed roots",
+          "expect_substring": "/tmp"
+        }
+      ]
+    },
+    {
+      "tool_id": "mcp:io.modelcontextprotocol/sequential-thinking",
+      "name": "Sequential Thinking",
+      "category": "reasoning",
+      "description": "Official structured step-by-step reasoning scratchpad server.",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "checks": [
+        {
+          "tool": "sequentialthinking",
+          "args": {
+            "thought": "probe check",
+            "thoughtNumber": 1,
+            "totalThoughts": 1,
+            "nextThoughtNeeded": false
+          },
+          "task_kind": "record a reasoning step",
+          "expect_substring": "thoughtNumber"
+        }
+      ]
+    },
+    {
+      "tool_id": "mcp:example.broken/ghost-server",
+      "name": "Ghost Server (known-dead)",
+      "category": "reference",
+      "description": "Deliberately nonexistent server — demonstrates that a server that never starts still produces honest, reportable outcomes.",
+      "command": "definitely-not-a-real-mcp-server-xyz",
+      "args": [],
+      "timeout_ms": 8000,
+      "checks": [
+        {
+          "tool": "anything",
+          "args": {},
+          "task_kind": "connect at all"
+        }
+      ]
+    }
+  ]
+}

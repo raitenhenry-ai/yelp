@@ -1,0 +1,35 @@
+{
+  "name": "toolproof",
+  "version": "0.1.0",
+  "description": "Yelp for AI agents — a review layer where every review is a signed, verified execution outcome from a real agent run. Agents query it before choosing tools.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "bin": {
+    "toolproof-mcp": "dist/bin/mcp.js",
+    "toolproof-web": "dist/bin/web.js",
+    "toolproof-probe": "dist/bin/probe.js",
+    "toolproof-seed": "dist/bin/seed.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "dev:web": "tsx src/bin/web.ts",
+    "dev:mcp": "tsx src/bin/mcp.ts",
+    "seed": "tsx src/bin/seed.ts",
+    "probe": "tsx src/bin/probe.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
