@@ -96,7 +96,7 @@ async function route(
   }
 
   if (req.method === 'GET' && path === '/tools') {
-    const result = getDirectory(db, {
+    const result = await getDirectory(db, {
       q: q.get('q') ?? undefined,
       category: q.get('category') ?? undefined,
       page: intParam(q, 'page', 1, 100_000),
@@ -108,7 +108,7 @@ async function route(
         siteName,
         result,
         { q: q.get('q') ?? undefined, category: q.get('category') ?? undefined },
-        db.listCategories(),
+        await db.listCategories(),
       ),
     );
     return;
@@ -128,7 +128,7 @@ async function route(
     // evidence; unknown ones render an invitation — the first submitted
     // review persists the page (ingest auto-registers unknown tools).
     const report =
-      getToolReport(db, toolId) ??
+      (await getToolReport(db, toolId)) ??
       ({
         tool_id: toolId,
         name: toolId.split(/[/#]/).pop() ?? toolId,
@@ -151,11 +151,9 @@ async function route(
         summary: '',
         recent_reviews: [],
         outcomes_sample: [],
-      } satisfies ReturnType<typeof getToolReport> & object);
+      } satisfies Awaited<ReturnType<typeof getToolReport>> & object);
     const failures = new Map<string, number>();
-    for (const o of report.outcomes_sample.length
-      ? db.outcomesForTool(toolId)
-      : []) {
+    for (const o of report.outcomes_sample.length ? await db.outcomesForTool(toolId) : []) {
       if (o.status === 'failure') {
         const mode = o.failure_mode ?? 'other';
         failures.set(mode, (failures.get(mode) ?? 0) + 1);
@@ -165,7 +163,7 @@ async function route(
     res.end(
       toolPageHtml(siteName, {
         report,
-        siblings: db.siblingTools(toolId),
+        siblings: await db.siblingTools(toolId),
         failureBreakdown: [...failures.entries()]
           .map(([mode, count]) => ({ mode, count }))
           .sort((a, b) => b.count - a.count),
@@ -180,20 +178,20 @@ async function route(
   }
 
   if (req.method === 'GET' && path === '/healthz') {
-    sendJson(res, 200, { ok: true, outcomes: db.countOutcomes(), uptime_s: process.uptime() });
+    sendJson(res, 200, { ok: true, outcomes: await db.countOutcomes(), uptime_s: process.uptime() });
     return;
   }
 
   if (req.method === 'GET' && path === '/api/feed') {
     sendJson(res, 200, {
-      feed: getFeed(db, intParam(q, 'limit', 50, 200), q.get('category') ?? undefined),
+      feed: await getFeed(db, intParam(q, 'limit', 50, 200), q.get('category') ?? undefined),
     });
     return;
   }
 
   if (req.method === 'GET' && path === '/api/tools') {
     sendJson(res, 200, {
-      results: getToolReviews(db, {
+      results: await getToolReviews(db, {
         capability: q.get('capability') ?? undefined,
         category: q.get('category') ?? undefined,
         limit: intParam(q, 'limit', 10, 50),
@@ -209,7 +207,7 @@ async function route(
       sendJson(res, 400, { error: 'malformed tool id encoding' });
       return;
     }
-    const report = getToolReport(db, toolId);
+    const report = await getToolReport(db, toolId);
     if (!report) {
       sendJson(res, 404, { error: `unknown tool_id: ${toolId}` });
       return;
@@ -220,7 +218,11 @@ async function route(
 
   if (req.method === 'GET' && path === '/api/leaderboard') {
     sendJson(res, 200, {
-      leaderboard: getLeaderboard(db, q.get('category') ?? undefined, intParam(q, 'limit', 20, 50)),
+      leaderboard: await getLeaderboard(
+        db,
+        q.get('category') ?? undefined,
+        intParam(q, 'limit', 20, 50),
+      ),
     });
     return;
   }
@@ -229,7 +231,7 @@ async function route(
     sendJson(
       res,
       200,
-      getDirectory(db, {
+      await getDirectory(db, {
         q: q.get('q') ?? undefined,
         category: q.get('category') ?? undefined,
         page: intParam(q, 'page', 1, 100_000),
@@ -240,21 +242,19 @@ async function route(
   }
 
   if (req.method === 'GET' && path === '/api/categories') {
-    sendJson(res, 200, { categories: db.listCategories() });
+    sendJson(res, 200, { categories: await db.listCategories() });
     return;
   }
 
   if (req.method === 'GET' && path === '/api/stats') {
-    const categories = db.listCategories();
-    const outcomes = db.countOutcomes();
-    const verifiedRow = db.db
-      .prepare('SELECT COUNT(*) AS n FROM outcomes WHERE verified = 1')
-      .get() as { n: number };
+    const categories = await db.listCategories();
+    const outcomes = await db.countOutcomes();
+    const verified = await db.countVerifiedOutcomes();
     sendJson(res, 200, {
       outcomes,
       tools: categories.reduce((a, c) => a + c.n_tools, 0),
       categories: categories.length,
-      verified_share: outcomes > 0 ? verifiedRow.n / outcomes : 0,
+      verified_share: outcomes > 0 ? verified / outcomes : 0,
     });
     return;
   }
@@ -262,7 +262,7 @@ async function route(
   if (req.method === 'POST' && path === '/api/outcomes') {
     const parsed = await readJsonBody(req, res, 64 * 1024);
     if (!parsed.ok) return;
-    const result = ingestOutcome(db, parsed.value);
+    const result = await ingestOutcome(db, parsed.value);
     sendJson(res, result.accepted ? 201 : 422, result);
     return;
   }

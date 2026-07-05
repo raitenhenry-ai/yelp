@@ -24,11 +24,11 @@ export const DEFAULT_LIMITS: IngestLimits = {
   totalPerDay: 5000,
 };
 
-export function ingestOutcome(
+export async function ingestOutcome(
   db: ToolProofDb,
   input: unknown,
   limits: IngestLimits = DEFAULT_LIMITS,
-): IngestResult {
+): Promise<IngestResult> {
   const parsed = SignedOutcomeSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -54,12 +54,12 @@ export function ingestOutcome(
     verified = true;
   }
 
-  if (db.hasOutcome(o.outcome_id)) {
+  if (await db.hasOutcome(o.outcome_id)) {
     return { accepted: false, verified, reason: 'duplicate outcome_id', outcome_id: o.outcome_id };
   }
 
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
-  if (db.reporterOutcomeCountSince(o.reporter_id, o.tool_id, dayAgo) >= limits.perToolPerDay) {
+  if ((await db.reporterOutcomeCountSince(o.reporter_id, o.tool_id, dayAgo)) >= limits.perToolPerDay) {
     return {
       accepted: false,
       verified,
@@ -67,7 +67,7 @@ export function ingestOutcome(
       outcome_id: o.outcome_id,
     };
   }
-  if (db.reporterTotalSince(o.reporter_id, dayAgo) >= limits.totalPerDay) {
+  if ((await db.reporterTotalSince(o.reporter_id, dayAgo)) >= limits.totalPerDay) {
     return {
       accepted: false,
       verified,
@@ -86,9 +86,9 @@ export function ingestOutcome(
     o.ts = new Date().toISOString();
   }
 
-  db.ensureReporter(o.reporter_id, { public_key: signed.public_key ?? null });
-  db.ensureTool(o.tool_id, o.tool_name ?? o.tool_id, o.category);
-  db.insertOutcome(o, verified);
+  await db.ensureReporter(o.reporter_id, { public_key: signed.public_key ?? null });
+  await db.ensureTool(o.tool_id, o.tool_name ?? o.tool_id, o.category);
+  await db.insertOutcome(o, verified);
 
   return { accepted: true, verified, outcome_id: o.outcome_id };
 }

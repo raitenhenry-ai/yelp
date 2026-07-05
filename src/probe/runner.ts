@@ -51,7 +51,7 @@ export async function probeTarget(
   const timeoutMs = target.timeout_ms ?? 30_000;
   const outcomes: ExecutionOutcome[] = [];
 
-  db.upsertTool({
+  await db.upsertTool({
     tool_id: target.tool_id,
     name: target.name,
     category: target.category,
@@ -151,7 +151,7 @@ export async function probeTarget(
 
   for (const outcome of outcomes) {
     const signed = signOutcome(outcome, identity);
-    const res = ingestOutcome(db, signed);
+    const res = await ingestOutcome(db, signed);
     log(
       `  ${outcome.status === 'success' ? '✓' : '✗'} ${target.name} :: ${outcome.task_kind} ` +
         `(${Math.round(outcome.latency_ms)}ms)${res.accepted ? '' : ` [rejected: ${res.reason}]`}`,

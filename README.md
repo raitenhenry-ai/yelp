@@ -10,7 +10,7 @@ ToolProof is the review layer agents call **before choosing** — and the review
 
 ## Quickstart
 
-Requires Node ≥ 22.5 (uses built-in `node:sqlite` and Ed25519 from `node:crypto` — the only runtime deps are the MCP SDK and zod).
+Requires Node ≥ 22.5 (uses built-in `node:sqlite` and Ed25519 from `node:crypto`). Runs on **SQLite** out of the box and on **Postgres** (Neon, Railway, RDS) when `DATABASE_URL` is set — see [Deploying on Railway with Neon](docs/INTEGRATION.md#deploying-on-railway-with-a-neon-database). Runtime deps: the MCP SDK, zod, and `pg`.
 
 ```bash
 npm install
@@ -167,7 +167,7 @@ See [docs/INTEGRATION.md](docs/INTEGRATION.md) for the full guide (including sig
 
 ## Design decisions & roadmap
 
-- **SQLite on purpose** — a solo-dev wedge should be one process with one file of state. The query layer is behind `src/query.ts`; swap storage when volume demands.
+- **Pluggable storage** — one async `Driver` interface (`src/driver.ts`) with two backends: SQLite (`node:sqlite`, zero-config local/dev) and Postgres (`pg`, for hosted deployments). `openDb()` picks Postgres when `DATABASE_URL` is set, else SQLite. SQL is authored once with `?` placeholders; the few dialect differences (placeholder style, case-insensitive ordering/`ILIKE`) live in the db layer. Same schema, same behavior — verified by `test/pg.test.ts` parity tests.
 - **Token-overlap capability matching** — crude and dependency-free; swap for embeddings when the catalog grows past a few hundred tools.
 - **ERC-8004** — the on-chain feedback registry could become the storage substrate for outcomes; this codebase's ingest/scoring/query layers are deliberately independent of where signed outcomes are persisted.
 - **Next**: session-trace attestation (bind outcomes to observability traces), claimed vendor profiles, category-by-category probe expansion, feed→social distribution.

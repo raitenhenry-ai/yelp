@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { ToolProofDb } from '../db.js';
+import { openDb } from '../db.js';
 import { ingestOutcome } from '../ingest.js';
 import { generateReporterIdentity, signOutcome, type ReporterIdentity } from '../signing.js';
 import { SEED_CATALOG, type SeedProfile } from '../seed/catalog.js';
@@ -119,23 +119,24 @@ function makeOutcome(
   };
 }
 
-const db = new ToolProofDb();
+const db = await openDb();
 const now = Date.now();
 
-const identities = REPORTERS.map((r) => {
+const identities: ReporterIdentity[] = [];
+for (const r of REPORTERS) {
   const identity = generateReporterIdentity();
-  db.ensureReporter(identity.reporter_id, {
+  await db.ensureReporter(identity.reporter_id, {
     public_key: identity.public_key,
     label: r.label,
     kind: r.kind,
   });
-  return identity;
-});
+  identities.push(identity);
+}
 
 let inserted = 0;
 let skipped = 0;
 for (const profile of SEED_CATALOG) {
-  db.upsertTool({
+  await db.upsertTool({
     tool_id: profile.tool_id,
     name: profile.name,
     category: profile.category,
@@ -147,17 +148,19 @@ for (const profile of SEED_CATALOG) {
     const outcome = makeOutcome(profile, i, identity, now);
     // Deterministic ids make reseeding idempotent, so skip known duplicates
     // without burning rate-limit budget.
-    if (db.hasOutcome(outcome.outcome_id)) {
+    if (await db.hasOutcome(outcome.outcome_id)) {
       skipped++;
       continue;
     }
-    const result = ingestOutcome(db, signOutcome(outcome, identity));
+    const result = await ingestOutcome(db, signOutcome(outcome, identity));
     result.accepted ? inserted++ : skipped++;
   }
 }
 
+const categoryCount = (await db.listCategories()).length;
+const total = await db.countOutcomes();
 console.log(
   `seeded ${inserted} outcomes (${skipped} skipped as duplicates) across ${SEED_CATALOG.length} tools, ` +
-    `${db.listCategories().length} categories. Total outcomes in db: ${db.countOutcomes()}.`,
+    `${categoryCount} categories. Total outcomes in db: ${total}.`,
 );
-db.close();
+await db.close();

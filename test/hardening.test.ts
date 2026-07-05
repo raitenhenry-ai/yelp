@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { ToolProofDb } from '../src/db.js';
+import type { ToolProofDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { scoreTool, DEFAULT_SCORING, UNVERIFIED_REPORTER_BUCKET } from '../src/scoring.js';
 import { safeHref } from '../src/web/shared.js';
@@ -113,19 +113,19 @@ describe('reporter maturity (H3)', () => {
 
 // ---- H5: future-dated timestamps are clamped at ingest ----
 describe('future-ts clamp (H5)', () => {
-  it('clamps a far-future ts to ~now so it decays normally', () => {
-    const db = memDb();
+  it('clamps a far-future ts to ~now so it decays normally', async () => {
+    const db = await memDb();
     const future = new Date(Date.now() + 10 * 365 * 86_400_000).toISOString();
-    ingestOutcome(db, { outcome: outcome({ tool_id: 'mcp:f/t', ts: future }) });
-    const stored = db.outcomesForTool('mcp:f/t')[0];
+    await ingestOutcome(db, { outcome: outcome({ tool_id: 'mcp:f/t', ts: future }) });
+    const stored = (await db.outcomesForTool('mcp:f/t'))[0];
     expect(new Date(stored.ts).getTime()).toBeLessThanOrEqual(Date.now() + 5_000);
   });
 
-  it('leaves a normal recent ts untouched', () => {
-    const db = memDb();
+  it('leaves a normal recent ts untouched', async () => {
+    const db = await memDb();
     const ts = daysAgo(2);
-    ingestOutcome(db, { outcome: outcome({ tool_id: 'mcp:n/t', ts }) });
-    expect(db.outcomesForTool('mcp:n/t')[0].ts).toBe(ts);
+    await ingestOutcome(db, { outcome: outcome({ tool_id: 'mcp:n/t', ts }) });
+    expect((await db.outcomesForTool('mcp:n/t'))[0].ts).toBe(ts);
   });
 });
 
@@ -150,18 +150,21 @@ describe('safeHref (H1)', () => {
 describe('HTTP hardening', () => {
   let server: Server;
   let base: string;
-  const db = new ToolProofDb(':memory:');
+  let db: ToolProofDb;
 
   beforeAll(async () => {
-    ingestOutcome(db, { outcome: outcome({ tool_id: 'mcp:hh/t', tool_name: 'HH', category: 'testing' }) });
+    db = await memDb();
+    await ingestOutcome(db, {
+      outcome: outcome({ tool_id: 'mcp:hh/t', tool_name: 'HH', category: 'testing' }),
+    });
     server = buildHttpServer(db, 'HH');
     await new Promise<void>((r) => server.listen(0, r));
     const a = server.address();
     base = `http://127.0.0.1:${typeof a === 'object' && a ? a.port : 0}`;
   });
-  afterAll(() => {
+  afterAll(async () => {
     server.close();
-    db.close();
+    await db.close();
   });
 
   it('F4: malformed percent-encoding → 400, not 500', async () => {

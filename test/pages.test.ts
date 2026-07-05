@@ -1,30 +1,31 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { ToolProofDb } from '../src/db.js';
+import { openDb, type ToolProofDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { ingestOutcome } from '../src/ingest.js';
 import { outcome } from './helpers.js';
 
 let server: Server;
 let base: string;
-const db = new ToolProofDb(':memory:');
+let db: ToolProofDb;
 
 beforeAll(async () => {
-  db.upsertTool({
+  db = await openDb(':memory:');
+  await db.upsertTool({
     tool_id: 'mcp:acme/server',
     name: 'Acme Server',
     category: 'search',
     description: 'The acme of search servers',
     homepage: 'https://acme.example',
   });
-  db.upsertTool({
+  await db.upsertTool({
     tool_id: 'mcp:acme/server#lookup',
     name: 'Acme Server › lookup',
     category: 'search',
     description: '',
     homepage: null,
   });
-  ingestOutcome(db, {
+  await ingestOutcome(db, {
     outcome: outcome({
       tool_id: 'mcp:acme/server#lookup',
       tool_name: 'Acme Server › lookup',
@@ -40,9 +41,9 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
 });
 
-afterAll(() => {
+afterAll(async () => {
   server.close();
-  db.close();
+  await db.close();
 });
 
 describe('directory page (/tools)', () => {

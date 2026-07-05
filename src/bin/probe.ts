@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { ToolProofDb } from '../db.js';
+import { openDb } from '../db.js';
 import { loadOrCreateIdentity } from '../identity.js';
 import { probeTarget, type ProbeTarget } from '../probe/runner.js';
 
@@ -29,8 +29,8 @@ const watchSeconds = values.watch ? Math.max(30, Number.parseInt(values.watch, 1
 const keyPath = process.env.TOOLPROOF_PROBE_KEY ?? '.toolproof/probe-key.json';
 
 const identity = loadOrCreateIdentity(keyPath);
-const db = new ToolProofDb();
-db.ensureReporter(identity.reporter_id, {
+const db = await openDb();
+await db.ensureReporter(identity.reporter_id, {
   public_key: identity.public_key,
   label: process.env.TOOLPROOF_PROBE_LABEL ?? 'toolproof probe fleet',
   kind: 'probe',
@@ -69,4 +69,4 @@ if (watchSeconds) {
     await round();
   }
 }
-db.close();
+await db.close();

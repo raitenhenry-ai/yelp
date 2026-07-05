@@ -16,30 +16,30 @@ describe('categorizeText', () => {
 });
 
 describe('getDirectory', () => {
-  function seeded() {
-    const db = memDb();
-    db.upsertTool({
+  async function seeded() {
+    const db = await memDb();
+    await db.upsertTool({
       tool_id: 'mcp:rated/one',
       name: 'Rated One',
       category: 'search',
       description: 'A search tool with evidence',
       homepage: null,
     });
-    db.upsertTool({
+    await db.upsertTool({
       tool_id: 'mcp:unrated/two',
       name: 'Unrated Two',
       category: 'search',
       description: 'Imported, never reviewed',
       homepage: null,
     });
-    ingestOutcome(db, {
+    await ingestOutcome(db, {
       outcome: outcome({ tool_id: 'mcp:rated/one', tool_name: 'Rated One', category: 'search' }),
     });
     return db;
   }
 
-  it('lists rated tools first and includes unrated pages', () => {
-    const dir = getDirectory(seeded());
+  it('lists rated tools first and includes unrated pages', async () => {
+    const dir = await getDirectory(await seeded());
     expect(dir.total).toBe(2);
     expect(dir.entries[0].tool_id).toBe('mcp:rated/one');
     expect(dir.entries[0].score?.n_outcomes).toBe(1);
@@ -47,29 +47,29 @@ describe('getDirectory', () => {
     expect(dir.entries[1].score).toBeUndefined();
   });
 
-  it('searches by name/description and filters by category', () => {
-    const db = seeded();
-    expect(getDirectory(db, { q: 'never reviewed' }).entries.map((e) => e.tool_id)).toEqual([
+  it('searches by name/description and filters by category', async () => {
+    const db = await seeded();
+    expect((await getDirectory(db, { q: 'never reviewed' })).entries.map((e) => e.tool_id)).toEqual([
       'mcp:unrated/two',
     ]);
-    expect(getDirectory(db, { category: 'search' }).total).toBe(2);
-    expect(getDirectory(db, { category: 'payments' }).total).toBe(0);
+    expect((await getDirectory(db, { category: 'search' })).total).toBe(2);
+    expect((await getDirectory(db, { category: 'payments' })).total).toBe(0);
   });
 
-  it('paginates', () => {
-    const db = seeded();
-    const p1 = getDirectory(db, { per_page: 1, page: 1 });
-    const p2 = getDirectory(db, { per_page: 1, page: 2 });
+  it('paginates', async () => {
+    const db = await seeded();
+    const p1 = await getDirectory(db, { per_page: 1, page: 1 });
+    const p2 = await getDirectory(db, { per_page: 1, page: 2 });
     expect(p1.pages).toBe(2);
     expect(p1.entries[0].tool_id).not.toBe(p2.entries[0].tool_id);
   });
 });
 
 describe('auto-page-on-review', () => {
-  it('a review of a never-seen tool creates its directory page', () => {
-    const db = memDb();
-    expect(db.getTool('mcp:brand/new')).toBeNull();
-    const res = ingestOutcome(db, {
+  it('a review of a never-seen tool creates its directory page', async () => {
+    const db = await memDb();
+    expect(await db.getTool('mcp:brand/new')).toBeNull();
+    const res = await ingestOutcome(db, {
       outcome: outcome({
         tool_id: 'mcp:brand/new',
         tool_name: 'Brand New Tool',
@@ -77,15 +77,15 @@ describe('auto-page-on-review', () => {
       }),
     });
     expect(res.accepted).toBe(true);
-    const page = db.getTool('mcp:brand/new');
+    const page = await db.getTool('mcp:brand/new');
     expect(page?.name).toBe('Brand New Tool');
-    expect(getDirectory(db, { q: 'brand new' }).entries[0].n_outcomes).toBe(1);
+    expect((await getDirectory(db, { q: 'brand new' })).entries[0].n_outcomes).toBe(1);
   });
 });
 
 describe('importers (mocked registries)', () => {
   it('imports latest-active MCP registry servers with pagination and categorization', async () => {
-    const db = memDb();
+    const db = await memDb();
     const pages = [
       {
         servers: [
@@ -121,16 +121,16 @@ describe('importers (mocked registries)', () => {
 
     const stats = await importMcpRegistry(db, { fetchFn });
     expect(stats).toMatchObject({ seen: 3, created: 2 });
-    expect(db.getTool('mcp:io.github.a/scraper')?.category).toBe('web-scraping');
-    const pg = db.getTool('mcp:io.github.b/pg');
+expect((await db.getTool('mcp:io.github.a/scraper'))?.category).toBe('web-scraping');
+    const pg = await db.getTool('mcp:io.github.b/pg');
     expect(pg?.name).toBe('Postgres MCP');
     expect(pg?.category).toBe('databases');
     expect(pg?.homepage).toBe('https://github.com/b/pg');
   });
 
   it('imports npm packages and never clobbers existing pages', async () => {
-    const db = memDb();
-    db.upsertTool({
+    const db = await memDb();
+    await db.upsertTool({
       tool_id: 'mcp:npm/already-here',
       name: 'Curated Name',
       category: 'payments',
@@ -153,10 +153,10 @@ describe('importers (mocked registries)', () => {
     const fetchFn = (async () => new Response(JSON.stringify(body), { status: 200 })) as typeof fetch;
     const stats = await importNpm(db, { fetchFn });
     expect(stats).toMatchObject({ seen: 2, created: 1, updated: 1 });
-    const kept = db.getTool('mcp:npm/already-here');
+    const kept = await db.getTool('mcp:npm/already-here');
     expect(kept?.name).toBe('Curated Name');
     expect(kept?.category).toBe('payments');
     expect(kept?.description).toBe('curated description');
-    expect(db.getTool('mcp:npm/fresh-scraper')?.category).toBe('web-scraping');
+expect((await db.getTool('mcp:npm/fresh-scraper'))?.category).toBe('web-scraping');
   });
 });

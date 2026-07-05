@@ -1,25 +1,26 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import { ToolProofClient } from '../src/client.js';
-import { ToolProofDb } from '../src/db.js';
+import { openDb, type ToolProofDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { generateReporterIdentity } from '../src/signing.js';
 
 let server: Server;
 let base: string;
-const db = new ToolProofDb(':memory:');
+let db: ToolProofDb;
 const identity = generateReporterIdentity();
 
 beforeAll(async () => {
+  db = await openDb(':memory:');
   server = buildHttpServer(db);
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const addr = server.address();
   base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
 });
 
-afterAll(() => {
+afterAll(async () => {
   server.close();
-  db.close();
+  await db.close();
 });
 
 describe('ToolProofClient', () => {
@@ -46,7 +47,7 @@ describe('ToolProofClient', () => {
 
   it('withOutcome times a successful call and reports it without interfering', async () => {
     const tp = new ToolProofClient({ baseUrl: base, identity });
-    const before = db.countOutcomes();
+    const before = await db.countOutcomes();
     const value = await tp.withOutcome(
       { tool_id: 'mcp:client/adder', category: 'math', task_kind: 'add numbers' },
       async () => {
@@ -55,8 +56,8 @@ describe('ToolProofClient', () => {
       },
     );
     expect(value).toBe(42);
-    await waitFor(() => db.countOutcomes() === before + 1);
-    const stored = db.outcomesForTool('mcp:client/adder')[0];
+    await waitFor(async () => (await db.countOutcomes()) === before + 1);
+    const stored = (await db.outcomesForTool('mcp:client/adder'))[0];
     expect(stored.status).toBe('success');
     expect(stored.latency_ms).toBeGreaterThanOrEqual(20);
     expect(stored.verified).toBe(true);
@@ -64,7 +65,7 @@ describe('ToolProofClient', () => {
 
   it('withOutcome classifies a thrown timeout and rethrows the original error', async () => {
     const tp = new ToolProofClient({ baseUrl: base, identity });
-    const before = db.countOutcomes();
+    const before = await db.countOutcomes();
     await expect(
       tp.withOutcome(
         { tool_id: 'mcp:client/slowpoke', category: 'testing', task_kind: 'be slow' },
@@ -73,15 +74,15 @@ describe('ToolProofClient', () => {
         },
       ),
     ).rejects.toThrow('timed out');
-    await waitFor(() => db.countOutcomes() === before + 1);
-    const stored = db.outcomesForTool('mcp:client/slowpoke')[0];
+    await waitFor(async () => (await db.countOutcomes()) === before + 1);
+    const stored = (await db.outcomesForTool('mcp:client/slowpoke'))[0];
     expect(stored.status).toBe('failure');
     expect(stored.failure_mode).toBe('timeout');
   });
 
   it('withOutcome honors a custom classifier for in-band failures', async () => {
     const tp = new ToolProofClient({ baseUrl: base, identity });
-    const before = db.countOutcomes();
+    const before = await db.countOutcomes();
     const result = await tp.withOutcome(
       { tool_id: 'mcp:client/hollow', category: 'testing', task_kind: 'return something' },
       async () => ({ text: '' }),
@@ -93,8 +94,8 @@ describe('ToolProofClient', () => {
       },
     );
     expect(result).toEqual({ text: '' });
-    await waitFor(() => db.countOutcomes() === before + 1);
-    const stored = db.outcomesForTool('mcp:client/hollow')[0];
+    await waitFor(async () => (await db.countOutcomes()) === before + 1);
+    const stored = (await db.outcomesForTool('mcp:client/hollow'))[0];
     expect(stored.status).toBe('failure');
     expect(stored.failure_mode).toBe('wrong_result');
   });
@@ -135,8 +136,8 @@ describe('ToolProofClient', () => {
       latency_ms: 1,
     });
     expect(ra.accepted && rb.accepted).toBe(true);
-    await waitFor(() => db.outcomesForTool('mcp:anon/a').length === 2);
-    const ids = new Set(db.outcomesForTool('mcp:anon/a').map((o) => o.reporter_id));
+    await waitFor(async () => (await db.outcomesForTool('mcp:anon/a')).length === 2);
+    const ids = new Set((await db.outcomesForTool('mcp:anon/a')).map((o) => o.reporter_id));
     expect(ids.size).toBe(2);
     for (const id of ids) expect(id.startsWith('anon-')).toBe(true);
   });
@@ -155,9 +156,9 @@ describe('ToolProofClient', () => {
   });
 });
 
-async function waitFor(cond: () => boolean, ms = 2000): Promise<void> {
+async function waitFor(cond: () => boolean | Promise<boolean>, ms = 2000): Promise<void> {
   const t0 = Date.now();
-  while (!cond()) {
+  while (!(await cond())) {
     if (Date.now() - t0 > ms) throw new Error('waitFor timed out');
     await new Promise((r) => setTimeout(r, 10));
   }

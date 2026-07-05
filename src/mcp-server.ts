@@ -39,7 +39,7 @@ export function buildMcpServer(db: ToolProofDb): McpServer {
       },
     },
     async ({ capability, category, limit, include_unrated }) => {
-      const reviews = getToolReviews(db, { capability, category, limit, include_unrated });
+      const reviews = await getToolReviews(db, { capability, category, limit, include_unrated });
       return jsonResult({
         results: reviews,
         note:
@@ -62,7 +62,7 @@ export function buildMcpServer(db: ToolProofDb): McpServer {
       },
     },
     async ({ tool_id }) => {
-      const report = getToolReport(db, tool_id);
+      const report = await getToolReport(db, tool_id);
       if (!report) return jsonResult({ error: `unknown tool_id: ${tool_id}` }, true);
       return jsonResult(report);
     },
@@ -88,7 +88,7 @@ export function buildMcpServer(db: ToolProofDb): McpServer {
       },
     },
     async ({ outcome, public_key, signature }) => {
-      const result = ingestOutcome(db, { outcome, public_key, signature });
+      const result = await ingestOutcome(db, { outcome, public_key, signature });
       return jsonResult(result, !result.accepted);
     },
   );
@@ -102,7 +102,7 @@ export function buildMcpServer(db: ToolProofDb): McpServer {
         'get_tool_reviews query.',
       inputSchema: {},
     },
-    async () => jsonResult({ categories: db.listCategories() }),
+    async () => jsonResult({ categories: await db.listCategories() }),
   );
 
   server.registerTool(
@@ -115,7 +115,8 @@ export function buildMcpServer(db: ToolProofDb): McpServer {
         limit: z.number().int().min(1).max(50).optional(),
       },
     },
-    async ({ category, limit }) => jsonResult({ leaderboard: getLeaderboard(db, category, limit) }),
+    async ({ category, limit }) =>
+      jsonResult({ leaderboard: await getLeaderboard(db, category, limit) }),
   );
 
   server.registerTool(
@@ -128,7 +129,7 @@ export function buildMcpServer(db: ToolProofDb): McpServer {
         category: z.string().optional(),
       },
     },
-    async ({ limit, category }) => jsonResult({ feed: getFeed(db, limit ?? 25, category) }),
+    async ({ limit, category }) => jsonResult({ feed: await getFeed(db, limit ?? 25, category) }),
   );
 
   return server;

@@ -1,6 +1,12 @@
-# Full deployment: the review server plus a probe sidecar that keeps
+# Local full deployment: the review server plus a probe sidecar that keeps
 # scores fresh (recency-weighted scoring is only honest if probes keep
 # running). Both share one SQLite volume; WAL mode handles the two writers.
+#
+# To run against Postgres instead (matching a Railway + Neon deploy), set
+# DATABASE_URL on both services — e.g. uncomment the `postgres` service below
+# and add `DATABASE_URL: postgres://toolproof:toolproof@postgres:5432/toolproof`
+# to each service's environment. When DATABASE_URL is set, the SQLite volume is
+# unused.
 services:
   web:
     build: .
@@ -23,5 +29,17 @@ services:
       TOOLPROOF_PROBE_LABEL: toolproof probe fleet
     restart: unless-stopped
 
+  # Uncomment to test the Postgres backend locally (then add DATABASE_URL to
+  # the web + probe services as noted above):
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: toolproof
+  #     POSTGRES_PASSWORD: toolproof
+  #     POSTGRES_DB: toolproof
+  #   volumes:
+  #     - toolproof-pg:/var/lib/postgresql/data
+
 volumes:
   toolproof-data:
+  # toolproof-pg:

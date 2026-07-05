@@ -97,7 +97,7 @@ export async function importMcpRegistry(
       // like "io.github.owner/repo", and the namespace would otherwise drag
       // every tool into the github/devops bucket.
       const shortName = server.name.split('/').pop() ?? server.name;
-      const created = db.registerImportedTool({
+      const created = await db.registerImportedTool({
         tool_id: `mcp:${server.name}`,
         name: server.title || server.name,
         category: categorizeText(`${shortName} ${server.title ?? ''} ${description}`),
@@ -148,7 +148,7 @@ export async function importNpm(db: ToolProofDb, opts: ImportOptions = {}): Prom
       const pkg = obj.package;
       if (!pkg?.name) continue;
       const description = (pkg.description ?? '').slice(0, 500);
-      const created = db.registerImportedTool({
+      const created = await db.registerImportedTool({
         tool_id: `mcp:npm/${pkg.name}`,
         name: pkg.name,
         category: categorizeText(`${pkg.name} ${description}`),

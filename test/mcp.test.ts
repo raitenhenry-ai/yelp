@@ -1,15 +1,16 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { ToolProofDb } from '../src/db.js';
+import { openDb, type ToolProofDb } from '../src/db.js';
 import { buildMcpServer } from '../src/mcp-server.js';
 import { generateReporterIdentity, signOutcome } from '../src/signing.js';
 import { outcome } from './helpers.js';
 
-const db = new ToolProofDb(':memory:');
+let db: ToolProofDb;
 let client: Client;
 
 beforeAll(async () => {
+  db = await openDb(':memory:');
   const server = buildMcpServer(db);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'test-agent', version: '0.0.1' });

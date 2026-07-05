@@ -1,24 +1,25 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { ToolProofDb } from '../src/db.js';
+import { openDb, type ToolProofDb } from '../src/db.js';
 import { buildHttpServer } from '../src/http-server.js';
 import { generateReporterIdentity, signOutcome } from '../src/signing.js';
 import { outcome } from './helpers.js';
 
 let server: Server;
 let base: string;
-const db = new ToolProofDb(':memory:');
+let db: ToolProofDb;
 
 beforeAll(async () => {
+  db = await openDb(':memory:');
   server = buildHttpServer(db, 'ToolProof Test');
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const addr = server.address();
   base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
 });
 
-afterAll(() => {
+afterAll(async () => {
   server.close();
-  db.close();
+  await db.close();
 });
 
 describe('HTTP API', () => {

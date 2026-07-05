@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { ToolProofDb } from '../db.js';
+import { openDb } from '../db.js';
 import { IMPORT_SOURCES } from '../import/sources.js';
 
 /**
@@ -15,7 +15,7 @@ const { values, positionals } = parseArgs({
 const max = values.max ? Number.parseInt(values.max, 10) : undefined;
 const sources = positionals.length ? positionals : Object.keys(IMPORT_SOURCES);
 
-const db = new ToolProofDb();
+const db = await openDb();
 for (const source of sources) {
   const importer = IMPORT_SOURCES[source];
   if (!importer) {
@@ -34,5 +34,5 @@ for (const source of sources) {
     process.exitCode = 1;
   }
 }
-console.log(`directory now has ${db.countTools()} tool pages.`);
-db.close();
+console.log(`directory now has ${await db.countTools()} tool pages.`);
+await db.close();

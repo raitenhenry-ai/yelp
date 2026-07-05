@@ -1,4 +1,6 @@
-# ToolProof — feed + API + remote MCP endpoint
+# ToolProof — feed + API + remote MCP endpoint.
+# Serves both backends: set DATABASE_URL (Neon/Railway Postgres) for hosted
+# deployments, or leave it unset to use the SQLite file under /data.
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./

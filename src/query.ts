@@ -1,7 +1,7 @@
 import type { ToolProofDb } from './db.js';
 import { scoreTool, starsForOutcome, type ScoringOptions } from './scoring.js';
 import { blurbForOutcome, summaryForTool } from './reviews.js';
-import type { FeedItem, StoredOutcome, ToolScore } from './types.js';
+import type { FeedItem, StoredOutcome, ToolRecord, ToolScore } from './types.js';
 
 /**
  * Query layer — what the MCP server and HTTP API expose.
@@ -23,26 +23,29 @@ export interface GetToolReviewsParams {
   include_unrated?: boolean;
 }
 
-export function getToolReviews(
+export async function getToolReviews(
   db: ToolProofDb,
   params: GetToolReviewsParams = {},
   scoring: Partial<ScoringOptions> = {},
-): ToolReview[] {
+): Promise<ToolReview[]> {
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
   const needle = params.capability?.toLowerCase().trim();
-  const scoringOpts: Partial<ScoringOptions> = { reputation: db.reporterReputation(), ...scoring };
+  const scoringOpts: Partial<ScoringOptions> = {
+    reputation: await db.reporterReputation(),
+    ...scoring,
+  };
 
   // Candidate set: rated tools always (there are few, even in a 20k catalog);
   // unrated pages only when explicitly requested, and then bounded by a SQL
   // search so a reviews query never scans the whole catalog (the default path
   // already excluded unrated tools, so this is behavior-preserving + fast).
-  const candidates = new Map<string, ReturnType<typeof db.getTool>>();
-  for (const id of db.ratedToolIds(params.category)) {
-    const t = db.getTool(id);
+  const candidates = new Map<string, ToolRecord>();
+  for (const id of await db.ratedToolIds(params.category)) {
+    const t = await db.getTool(id);
     if (t) candidates.set(id, t);
   }
   if (params.include_unrated) {
-    for (const t of db.searchTools({
+    for (const t of await db.searchTools({
       q: params.capability,
       category: params.category,
       limit: 500,
@@ -54,7 +57,7 @@ export function getToolReviews(
   const scored: (ToolReview & { match: number })[] = [];
   for (const tool of candidates.values()) {
     if (!tool) continue;
-    const outcomes = db.outcomesForTool(tool.tool_id);
+    const outcomes = await db.outcomesForTool(tool.tool_id);
     const match = needle ? matchScore(needle, tool, outcomes) : 1;
     if (needle && match === 0) continue;
     if (!params.include_unrated && outcomes.length === 0) continue;
@@ -84,15 +87,15 @@ export interface ToolReport extends ToolReview {
   outcomes_sample: StoredOutcome[];
 }
 
-export function getToolReport(
+export async function getToolReport(
   db: ToolProofDb,
   tool_id: string,
   scoring: Partial<ScoringOptions> = {},
-): ToolReport | null {
-  const tool = db.getTool(tool_id);
+): Promise<ToolReport | null> {
+  const tool = await db.getTool(tool_id);
   if (!tool) return null;
-  const outcomes = db.outcomesForTool(tool_id);
-  const s = scoreTool(tool, outcomes, { reputation: db.reporterReputation(), ...scoring });
+  const outcomes = await db.outcomesForTool(tool_id);
+  const s = scoreTool(tool, outcomes, { reputation: await db.reporterReputation(), ...scoring });
   return {
     ...s,
     summary: summaryForTool(s),
@@ -108,22 +111,23 @@ export function getToolReport(
   };
 }
 
-export function getLeaderboard(
+export async function getLeaderboard(
   db: ToolProofDb,
   category?: string,
   limit = 20,
   scoring: Partial<ScoringOptions> = {},
-): ToolScore[] {
+): Promise<ToolScore[]> {
   // Only rated tools — with an imported catalog of thousands of unreviewed
   // pages, scoring every row would be wasted work.
-  const scoringOpts: Partial<ScoringOptions> = { reputation: db.reporterReputation(), ...scoring };
-  const scored = db
-    .ratedToolIds(category)
-    .map((id) => {
-      const tool = db.getTool(id);
-      return tool ? scoreTool(tool, db.outcomesForTool(id), scoringOpts) : null;
-    })
-    .filter((s): s is ToolScore => s !== null);
+  const scoringOpts: Partial<ScoringOptions> = {
+    reputation: await db.reporterReputation(),
+    ...scoring,
+  };
+  const scored: ToolScore[] = [];
+  for (const id of await db.ratedToolIds(category)) {
+    const tool = await db.getTool(id);
+    if (tool) scored.push(scoreTool(tool, await db.outcomesForTool(id), scoringOpts));
+  }
   scored.sort((a, b) => b.rank_score - a.rank_score);
   return scored.slice(0, limit);
 }
@@ -147,38 +151,47 @@ export interface DirectoryResult {
   per_page: number;
 }
 
-export function getDirectory(
+export async function getDirectory(
   db: ToolProofDb,
   params: { q?: string; category?: string; page?: number; per_page?: number } = {},
   scoring: Partial<ScoringOptions> = {},
-): DirectoryResult {
+): Promise<DirectoryResult> {
   const perPage = Math.min(Math.max(params.per_page ?? 30, 1), 100);
-  const total = db.countTools(params);
+  const total = await db.countTools(params);
   const pages = Math.max(1, Math.ceil(total / perPage));
   const page = Math.min(Math.max(params.page ?? 1, 1), pages);
-  const rows = db.searchTools({ ...params, limit: perPage, offset: (page - 1) * perPage });
+  const rows = await db.searchTools({ ...params, limit: perPage, offset: (page - 1) * perPage });
   // Only pull the reputation map if this page actually has rated tools to score.
   const scoringOpts: Partial<ScoringOptions> = rows.some((t) => t.n_outcomes > 0)
-    ? { reputation: db.reporterReputation(), ...scoring }
+    ? { reputation: await db.reporterReputation(), ...scoring }
     : scoring;
-  const entries: DirectoryEntry[] = rows.map((t) => ({
-    tool_id: t.tool_id,
-    name: t.name,
-    category: t.category,
-    description: t.description,
-    homepage: t.homepage,
-    n_outcomes: t.n_outcomes,
-    score: t.n_outcomes > 0 ? scoreTool(t, db.outcomesForTool(t.tool_id), scoringOpts) : undefined,
-  }));
+  const entries: DirectoryEntry[] = [];
+  for (const t of rows) {
+    entries.push({
+      tool_id: t.tool_id,
+      name: t.name,
+      category: t.category,
+      description: t.description,
+      homepage: t.homepage,
+      n_outcomes: t.n_outcomes,
+      score:
+        t.n_outcomes > 0 ? scoreTool(t, await db.outcomesForTool(t.tool_id), scoringOpts) : undefined,
+    });
+  }
   return { entries, total, page, pages, per_page: perPage };
 }
 
-export function getFeed(db: ToolProofDb, limit = 50, category?: string): FeedItem[] {
-  const outcomes = db.recentOutcomes(limit, category);
-  return outcomes.map((o) => {
-    const tool = db.getTool(o.tool_id);
-    const reporter = db.getReporter(o.reporter_id);
-    return {
+export async function getFeed(
+  db: ToolProofDb,
+  limit = 50,
+  category?: string,
+): Promise<FeedItem[]> {
+  const outcomes = await db.recentOutcomes(limit, category);
+  const items: FeedItem[] = [];
+  for (const o of outcomes) {
+    const tool = await db.getTool(o.tool_id);
+    const reporter = await db.getReporter(o.reporter_id);
+    items.push({
       outcome_id: o.outcome_id,
       tool_id: o.tool_id,
       tool_name: tool?.name ?? o.tool_id,
@@ -191,8 +204,9 @@ export function getFeed(db: ToolProofDb, limit = 50, category?: string): FeedIte
       blurb: blurbForOutcome(o),
       latency_ms: o.latency_ms,
       ts: o.ts,
-    };
-  });
+    });
+  }
+  return items;
 }
 
 /**

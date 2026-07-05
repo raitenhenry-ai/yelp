@@ -8,6 +8,21 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: toolproof
+          POSTGRES_PASSWORD: toolproof
+          POSTGRES_DB: toolproof
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U toolproof"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Exercises the Postgres backend + dialect parity tests (test/pg.test.ts).
+      TEST_DATABASE_URL: postgresql://toolproof:toolproof@localhost:5432/toolproof
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,10 +32,19 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - name: Smoke test — seed, serve, query
+      - name: Smoke test on SQLite — seed, serve, query
         run: |
           npx tsx src/bin/seed.ts
           node dist/bin/web.js &
           sleep 2
           curl -sf http://localhost:4117/healthz
           curl -sf "http://localhost:4117/api/tools?capability=scrape%20a%20page" | grep -q tool_id
+      - name: Smoke test on Postgres — seed + serve against Neon-shaped DB
+        env:
+          DATABASE_URL: postgresql://toolproof:toolproof@localhost:5432/toolproof
+        run: |
+          npx tsx src/bin/seed.ts
+          PORT=4300 node dist/bin/web.js &
+          sleep 2
+          curl -sf http://localhost:4300/healthz
+          curl -sf "http://localhost:4300/api/tools?capability=scrape%20a%20page" | grep -q tool_id

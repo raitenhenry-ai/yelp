@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { ToolProofDb } from '../src/db.js';
+import { openDb, type ToolProofDb } from '../src/db.js';
 import type { ExecutionOutcome } from '../src/types.js';
 
-export function memDb(): ToolProofDb {
-  return new ToolProofDb(':memory:');
+/** In-memory SQLite store for tests. Async because the store interface is. */
+export function memDb(): Promise<ToolProofDb> {
+  return openDb(':memory:');
 }
 
 export function outcome(overrides: Partial<ExecutionOutcome> = {}): ExecutionOutcome {

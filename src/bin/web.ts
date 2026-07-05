@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-import { ToolProofDb } from '../db.js';
+import { openDb } from '../db.js';
 import { buildHttpServer } from '../http-server.js';
 
 const port = Number.parseInt(process.env.PORT ?? '4117', 10);
 const host = process.env.HOST ?? '0.0.0.0';
-const db = new ToolProofDb();
+const db = await openDb();
 const server = buildHttpServer(db, process.env.TOOLPROOF_NAME ?? 'ToolProof');
+const backend = process.env.DATABASE_URL ? 'postgres' : (process.env.TOOLPROOF_DB ?? 'toolproof.db');
 
 server.listen(port, host, () => {
   console.log(
-    `toolproof up on http://${host}:${port} — feed at /, MCP at /mcp, API at /api/* ` +
-      `(db: ${process.env.TOOLPROOF_DB ?? 'toolproof.db'})`,
+    `toolproof up on http://${host}:${port} — feed at /, MCP at /mcp, API at /api/* (db: ${backend})`,
   );
 });
 
@@ -21,8 +21,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     shuttingDown = true;
     console.log(`${signal} received, draining connections…`);
     server.close(() => {
-      db.close();
-      process.exit(0);
+      void db.close().then(() => process.exit(0));
     });
     // Hard exit if connections refuse to drain.
     setTimeout(() => process.exit(0), 5000).unref();

@@ -167,10 +167,53 @@ Environment:
 
 | Var | Default | Meaning |
 |---|---|---|
-| `PORT` | `4117` | HTTP port |
+| `DATABASE_URL` | _(unset)_ | Postgres connection string (Neon/Railway/RDS). When set, the app runs on Postgres and `TOOLPROOF_DB` is ignored. |
+| `PORT` | `4117` | HTTP port (Railway sets this automatically) |
 | `HOST` | `0.0.0.0` | Bind address |
-| `TOOLPROOF_DB` | `toolproof.db` | SQLite path |
+| `TOOLPROOF_DB` | `toolproof.db` | SQLite path, used only when `DATABASE_URL` is unset |
 | `TOOLPROOF_NAME` | `ToolProof` | Site name on the feed |
+| `PGPOOL_MAX` | `10` | Max pooled Postgres connections |
+| `PGSSL_STRICT` | _(unset)_ | Set `1` to strictly verify the Postgres TLS chain (default relaxed for managed providers) |
 | `TOOLPROOF_KEY` | `.toolproof/identity.json` | Client identity path |
 | `TOOLPROOF_PROBE_KEY` | `.toolproof/probe-key.json` | Probe identity path |
 | `TOOLPROOF_PROBE_LABEL` | `toolproof probe fleet` | Probe label on the feed |
+
+## Deploying on Railway with a Neon database
+
+ToolProof runs on SQLite by default and on Postgres when `DATABASE_URL` is set.
+The schema is created automatically on first boot — no migration step.
+
+1. **Create the Neon database.** At [neon.tech](https://neon.tech), create a
+   project and copy the connection string. Prefer the **pooled** endpoint (its
+   host contains `-pooler`) for a long-running server. It already includes
+   `?sslmode=require`, which the app handles automatically.
+
+2. **Create the Railway service.** New Project → Deploy from your GitHub repo.
+   Railway detects the `Dockerfile` and `railway.json` (health check `/healthz`,
+   restart-on-failure). No build config needed.
+
+3. **Set the variable.** In the service's **Variables**, add:
+   ```
+   DATABASE_URL = postgresql://user:password@ep-xxx-pooler.REGION.aws.neon.tech/DB?sslmode=require
+   ```
+   Railway injects `PORT` itself; everything else has a default. (You can also
+   use Railway's own Postgres plugin instead of Neon — same `DATABASE_URL`.)
+
+4. **Deploy.** Railway builds the image, boots the server, and the health check
+   goes green once `/healthz` responds. Your landing page is at the service URL;
+   the agent endpoint is `https://<service>.up.railway.app/mcp`.
+
+5. **Seed / import (optional, one-off).** From `railway run` (or a one-off
+   service) with the same `DATABASE_URL`:
+   ```bash
+   railway run node dist/bin/seed.js        # demo dataset
+   railway run node dist/bin/import.js      # ~20k tool pages from the registries
+   ```
+
+6. **Keep scores fresh (optional).** Add a second Railway service from the same
+   repo with start command
+   `node dist/bin/probe.js probes/targets.json --watch 300` and the same
+   `DATABASE_URL`, so a probe fleet re-checks real servers every 5 minutes.
+
+To run the exact same Postgres path locally, uncomment the `postgres` service
+in `docker-compose.yml` and set `DATABASE_URL` on the `web`/`probe` services.

@@ -1,6 +1,7 @@
 export * from './types.js';
 export * from './canonical.js';
 export * from './signing.js';
+export * from './driver.js';
 export * from './db.js';
 export * from './scoring.js';
 export * from './reviews.js';
