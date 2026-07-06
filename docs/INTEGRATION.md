@@ -177,7 +177,7 @@ Environment:
 | `FILTERLY_KEY` | `.filterly/identity.json` | Client identity path |
 | `FILTERLY_PROBE_KEY` | `.filterly/probe-key.json` | Probe identity path |
 | `FILTERLY_PROBE_LABEL` | `filterly probe fleet` | Probe label on the feed |
-| `FILTERLY_AUTOSEED` | `1500` (when empty) | On first boot, if the DB has zero outcomes, import a real catalog and generate this many demo reviews in the background. Set `off` to disable, or a number to change the count. Fires once; never touches a non-empty DB. |
+| `FILTERLY_AUTOSEED` | `1573` (target) | On boot, top the review count up to this target in the background (importing a real catalog if needed). No-op once the target is reached, so it won't grow on restarts. Set `off` to disable, or a number to change the target. |
 | `FILTERLY_NEON_HTTP` | _(unset)_ | Set `1` to use Neon's serverless HTTPS transport instead of a Postgres TCP connection (serverless/edge, or where 5432 is blocked) |
 
 ## Deploying on Railway with a Neon database

@@ -428,6 +428,38 @@ export class FilterlyDb {
     return map;
   }
 
+  /** Count outcomes belonging to the given tools (demo-seed bookkeeping). */
+  async countOutcomesForTools(toolIds: string[]): Promise<number> {
+    if (toolIds.length === 0) return 0;
+    let total = 0;
+    const CH = 800;
+    for (let i = 0; i < toolIds.length; i += CH) {
+      const ids = toolIds.slice(i, i + CH);
+      const rows = await this.driver.all<{ n: number | string }>(
+        `SELECT COUNT(*) AS n FROM outcomes WHERE tool_id IN (${ids.map(() => '?').join(',')})`,
+        ids,
+      );
+      total += Number(rows[0]?.n ?? 0);
+    }
+    return total;
+  }
+
+  /**
+   * Remove demo-seed reviews that are NOT on the given tools — used to retire an
+   * older seed (on random tools) without touching real agent reviews. Only
+   * outcomes from seed reporters (label starting 'seed-') are affected.
+   */
+  async deleteSeedOutcomesExcept(keepToolIds: string[]): Promise<number> {
+    const keep = keepToolIds.length ? `AND tool_id NOT IN (${keepToolIds.map(() => '?').join(',')})` : '';
+    const before = await this.countOutcomes();
+    await this.driver.run(
+      `DELETE FROM outcomes
+       WHERE reporter_id IN (SELECT reporter_id FROM reporters WHERE label LIKE 'seed-%') ${keep}`,
+      keepToolIds,
+    );
+    return before - (await this.countOutcomes());
+  }
+
   /** Fetch many tool records in one round-trip, keyed by tool_id. */
   async getToolsMap(toolIds: string[]): Promise<Map<string, ToolRecord>> {
     const map = new Map<string, ToolRecord>();

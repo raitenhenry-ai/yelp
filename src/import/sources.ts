@@ -1,5 +1,6 @@
 import type { FilterlyDb } from '../db.js';
 import { categorizeText } from '../catalog.js';
+import { prettyName } from '../names.js';
 
 /**
  * Catalog importers: pull "literally every piece of software" agents might
@@ -100,7 +101,7 @@ export async function importMcpRegistry(
       const shortName = server.name.split('/').pop() ?? server.name;
       batch.push({
         tool_id: `mcp:${server.name}`,
-        name: server.title || server.name,
+        name: prettyName(server.name, server.title, description),
         category: categorizeText(`${shortName} ${server.title ?? ''} ${description}`),
         description,
         homepage: server.websiteUrl ?? server.repository?.url ?? null,

@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { FilterlyDb } from '../db.js';
 import { generateReporterIdentity, type ReporterIdentity } from '../signing.js';
 import { importMcpRegistry, importNpm } from '../import/sources.js';
-import { SEED_CATALOG } from './catalog.js';
-import type { ExecutionOutcome, StoredOutcome, ToolRecord } from '../types.js';
+import { CURATED_TOOLS } from './curated.js';
+import type { ExecutionOutcome, StoredOutcome } from '../types.js';
 
 /**
  * Generate a realistic good/bad mix of reviews across REAL catalog tools
@@ -93,7 +93,7 @@ const BAD_NOTES: Record<string, string[]> = {
 };
 
 export async function bulkSeed(db: FilterlyDb, opts: BulkSeedOptions = {}): Promise<BulkSeedResult> {
-  const TARGET = Math.max(1, opts.count ?? 1500);
+  const TARGET = Math.max(1, opts.count ?? 1573);
   const N_TOOLS = Math.max(1, opts.tools ?? 160);
   const log = opts.log ?? (() => {});
   const rng = mulberry32(0x5eed1500 ^ TARGET);
@@ -126,34 +126,26 @@ export async function bulkSeed(db: FilterlyDb, opts: BulkSeedOptions = {}): Prom
     return entries[entries.length - 1][0] as StoredOutcome['failure_mode'];
   };
 
-  let catalog = await db.countTools();
-  if (catalog < N_TOOLS * 2 && opts.doImport !== false) {
-    log('catalog is thin — importing real tools from the MCP registry + npm…');
+  // Reviews land only on the curated real-name tools (upsert with an
+  // authoritative name so the leaderboard/feed always read correctly, even if
+  // the same id was previously imported with a machine-guessed name).
+  for (const t of CURATED_TOOLS) {
+    await db.upsertTool({
+      tool_id: t.tool_id,
+      name: t.name,
+      category: t.category,
+      description: t.description,
+      homepage: null,
+    });
+  }
+
+  // Separately, import the broader catalog so the directory is browsable
+  // (these stay unrated unless a real agent reviews them). Best-effort.
+  if (opts.doImport !== false && (await db.countTools()) < 200) {
+    log('importing the MCP registry + npm for the directory…');
     await importMcpRegistry(db, { max: 6000, log }).catch((e) => log('registry import: ' + e.message));
     await importNpm(db, { max: 2500, log }).catch((e) => log('npm import: ' + e.message));
-    catalog = await db.countTools();
-    log(`catalog now ${catalog} tools`);
   }
-
-  // Guarantee we never come up empty: if the live import produced too few
-  // tools (registry unreachable, network policy, etc.), fall back to the
-  // bundled demo catalog so the leaderboard and feed always have content.
-  if (catalog < 15) {
-    log('falling back to the bundled demo catalog');
-    await db.bulkUpsertImportedTools(
-      SEED_CATALOG.map((p) => ({
-        tool_id: p.tool_id,
-        name: p.name,
-        category: p.category,
-        description: p.description,
-        homepage: p.homepage ?? null,
-      })),
-    );
-  }
-
-  let tools: ToolRecord[] = await db.sampleTools(N_TOOLS);
-  if (tools.length === 0) tools = await db.sampleTools(N_TOOLS, false);
-  if (tools.length === 0) throw new Error('no tools to review — catalog is empty');
 
   const REPORTERS: { label: string; kind: 'probe' | 'agent' }[] = [
     { label: 'seed-probe/us-east', kind: 'probe' },
@@ -174,16 +166,16 @@ export async function bulkSeed(db: FilterlyDb, opts: BulkSeedOptions = {}): Prom
 
   const now = Date.now();
   const rows: { outcome: ExecutionOutcome; verified: boolean }[] = [];
-  const toolProfiles = tools.map((t) => {
-    const tier = pickTier();
-    return {
-      tool: t,
-      reliability: lerp(tier.rel[0], tier.rel[1]),
-      latMed: rint(tier.latMed[0], tier.latMed[1]),
-      failWeights: shuffledFailureWeights(),
-      drift: rng() < 0.08 ? { daysAgo: rint(3, 8), to: lerp(0.1, 0.4) } : null,
-    };
-  });
+  // Each curated tool keeps its hand-set reliability/latency so the ranking is
+  // believable (well-run services near the top). A few get a recent "it broke"
+  // regression for a realistic declining-trend signal.
+  const toolProfiles = CURATED_TOOLS.map((t) => ({
+    tool: { tool_id: t.tool_id, name: t.name, category: t.category },
+    reliability: t.reliability,
+    latMed: t.latency_med_ms,
+    failWeights: shuffledFailureWeights(),
+    drift: rng() < 0.1 ? { daysAgo: rint(3, 8), to: lerp(0.1, 0.4) } : null,
+  }));
 
   let i = 0;
   while (rows.length < TARGET) {

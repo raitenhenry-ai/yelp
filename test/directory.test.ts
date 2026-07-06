@@ -123,7 +123,7 @@ describe('importers (mocked registries)', () => {
     expect(stats).toMatchObject({ seen: 3, created: 2 });
 expect((await db.getTool('mcp:io.github.a/scraper'))?.category).toBe('web-scraping');
     const pg = await db.getTool('mcp:io.github.b/pg');
-    expect(pg?.name).toBe('Postgres MCP');
+    expect(pg?.name).toBe('Postgres'); // prettyName trims the "MCP" boilerplate
     expect(pg?.category).toBe('databases');
     expect(pg?.homepage).toBe('https://github.com/b/pg');
   });

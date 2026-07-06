@@ -2,6 +2,7 @@
 import { openDb } from '../db.js';
 import { buildHttpServer } from '../http-server.js';
 import { bulkSeed } from '../seed/generate.js';
+import { CURATED_TOOLS } from '../seed/curated.js';
 
 const port = Number.parseInt(process.env.PORT ?? '4117', 10);
 const host = process.env.HOST ?? '0.0.0.0';
@@ -13,29 +14,38 @@ server.listen(port, host, () => {
   console.log(
     `filterly up on http://${host}:${port} — feed at /, MCP at /mcp, API at /api/* (db: ${backend})`,
   );
-  void maybeAutoSeed();
+  void maybeSeedDemo();
 });
 
+const AUTOSEED_TARGET = 1573;
+
 /**
- * First-boot self-seed: if the database is empty, import a real catalog and
- * generate a demo review set so a fresh deployment isn't a blank page. Runs
- * in the background (never blocks serving), only when there are zero outcomes,
- * so it fires once and never clobbers real data. Disable with FILTERLY_AUTOSEED=off;
- * set FILTERLY_AUTOSEED=<number> to choose the review count (default 1500).
+ * Keep the demo review set present and correct, in the background:
+ *  - retire any older demo reviews that were on other (machine-named) tools,
+ *  - top the reviews on the curated real-name tools up to the target.
+ * Only touches demo-seed data (reporters labelled 'seed-'); real agent reviews
+ * are never removed. No-op once the target is reached, so it won't grow on
+ * restarts. Disable with FILTERLY_AUTOSEED=off; set a number to change the target.
  */
-async function maybeAutoSeed(): Promise<void> {
+async function maybeSeedDemo(): Promise<void> {
   const setting = process.env.FILTERLY_AUTOSEED ?? '';
   if (setting.toLowerCase() === 'off' || setting === '0') return;
   try {
-    if ((await db.countOutcomes()) > 0) return; // already has data — leave it alone
-    const count = /^\d+$/.test(setting) ? Number.parseInt(setting, 10) : 1500;
-    console.log(`auto-seed: empty database detected, seeding ${count} demo reviews in the background…`);
-    const res = await bulkSeed(db, { count, log: (m) => console.log(`auto-seed: ${m}`) });
+    const target = /^\d+$/.test(setting) ? Number.parseInt(setting, 10) : AUTOSEED_TARGET;
+    const curatedIds = CURATED_TOOLS.map((t) => t.tool_id);
+    const onCurated = await db.countOutcomesForTools(curatedIds);
+    if (onCurated >= target) return; // demo set already in place
+
+    const removed = await db.deleteSeedOutcomesExcept(curatedIds);
+    if (removed > 0) console.log(`demo-seed: retired ${removed} old demo reviews`);
+    const count = target - onCurated;
+    console.log(`demo-seed: seeding ${count} reviews on curated tools in the background…`);
+    const res = await bulkSeed(db, { count, log: (m) => console.log(`demo-seed: ${m}`) });
     console.log(
-      `auto-seed: done — ${res.inserted} reviews (${res.good} success / ${res.partial} partial / ${res.bad} failure) across ${res.tools} tools.`,
+      `demo-seed: done — added ${res.inserted} reviews (${res.good} success / ${res.partial} partial / ${res.bad} failure) across ${res.tools} tools; total now ${await db.countOutcomes()}.`,
     );
   } catch (err) {
-    console.error(`auto-seed skipped: ${err instanceof Error ? err.message : err}`);
+    console.error(`demo-seed skipped: ${err instanceof Error ? err.message : err}`);
   }
 }
 
