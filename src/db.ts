@@ -401,6 +401,63 @@ export class FilterlyDb {
     return rows.map(rowToOutcome);
   }
 
+  /**
+   * Outcomes for many tools in one round-trip, grouped by tool_id (each list
+   * newest-first). Avoids N+1 queries when scoring a page of tools — this is
+   * what keeps the leaderboard/reviews fast over a networked Postgres.
+   */
+  async outcomesForToolsMap(toolIds: string[]): Promise<Map<string, StoredOutcome[]>> {
+    const map = new Map<string, StoredOutcome[]>();
+    const CH = 800;
+    for (let i = 0; i < toolIds.length; i += CH) {
+      const ids = toolIds.slice(i, i + CH);
+      const rows = await this.driver.all<Record<string, unknown>>(
+        `SELECT * FROM outcomes WHERE tool_id IN (${ids.map(() => '?').join(',')}) ORDER BY ts DESC`,
+        ids,
+      );
+      for (const r of rows) {
+        const o = rowToOutcome(r);
+        let arr = map.get(o.tool_id);
+        if (!arr) {
+          arr = [];
+          map.set(o.tool_id, arr);
+        }
+        arr.push(o);
+      }
+    }
+    return map;
+  }
+
+  /** Fetch many tool records in one round-trip, keyed by tool_id. */
+  async getToolsMap(toolIds: string[]): Promise<Map<string, ToolRecord>> {
+    const map = new Map<string, ToolRecord>();
+    const CH = 800;
+    for (let i = 0; i < toolIds.length; i += CH) {
+      const ids = toolIds.slice(i, i + CH);
+      const rows = await this.driver.all<ToolRecord>(
+        `SELECT * FROM tools WHERE tool_id IN (${ids.map(() => '?').join(',')})`,
+        ids,
+      );
+      for (const t of rows) map.set(t.tool_id, t);
+    }
+    return map;
+  }
+
+  /** Fetch many reporter records in one round-trip, keyed by reporter_id. */
+  async getReportersMap(reporterIds: string[]): Promise<Map<string, ReporterRecord>> {
+    const map = new Map<string, ReporterRecord>();
+    const CH = 800;
+    for (let i = 0; i < reporterIds.length; i += CH) {
+      const ids = reporterIds.slice(i, i + CH);
+      const rows = await this.driver.all<ReporterRecord>(
+        `SELECT * FROM reporters WHERE reporter_id IN (${ids.map(() => '?').join(',')})`,
+        ids,
+      );
+      for (const r of rows) map.set(r.reporter_id, r);
+    }
+    return map;
+  }
+
   /** Most recent outcomes across all tools (for the public feed). */
   async recentOutcomes(limit = 50, category?: string): Promise<StoredOutcome[]> {
     const rows = category

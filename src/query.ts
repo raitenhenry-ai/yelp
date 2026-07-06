@@ -39,11 +39,11 @@ export async function getToolReviews(
   // unrated pages only when explicitly requested, and then bounded by a SQL
   // search so a reviews query never scans the whole catalog (the default path
   // already excluded unrated tools, so this is behavior-preserving + fast).
+  // Tools and their outcomes are fetched in one round-trip each (not per-tool),
+  // so this is a handful of queries regardless of catalog size.
   const candidates = new Map<string, ToolRecord>();
-  for (const id of await db.ratedToolIds(params.category)) {
-    const t = await db.getTool(id);
-    if (t) candidates.set(id, t);
-  }
+  const ratedIds = await db.ratedToolIds(params.category);
+  for (const [id, t] of await db.getToolsMap(ratedIds)) candidates.set(id, t);
   if (params.include_unrated) {
     for (const t of await db.searchTools({
       q: params.capability,
@@ -53,11 +53,12 @@ export async function getToolReviews(
       if (!candidates.has(t.tool_id)) candidates.set(t.tool_id, t);
     }
   }
+  const outcomesByTool = await db.outcomesForToolsMap([...candidates.keys()]);
 
   const scored: (ToolReview & { match: number })[] = [];
   for (const tool of candidates.values()) {
     if (!tool) continue;
-    const outcomes = await db.outcomesForTool(tool.tool_id);
+    const outcomes = outcomesByTool.get(tool.tool_id) ?? [];
     const match = needle ? matchScore(needle, tool, outcomes) : 1;
     if (needle && match === 0) continue;
     if (!params.include_unrated && outcomes.length === 0) continue;
@@ -123,10 +124,14 @@ export async function getLeaderboard(
     reputation: await db.reporterReputation(),
     ...scoring,
   };
+  // Batch: rated ids, then all their tools and outcomes in one round-trip each.
+  const ratedIds = await db.ratedToolIds(category);
+  const toolsMap = await db.getToolsMap(ratedIds);
+  const outcomesByTool = await db.outcomesForToolsMap(ratedIds);
   const scored: ToolScore[] = [];
-  for (const id of await db.ratedToolIds(category)) {
-    const tool = await db.getTool(id);
-    if (tool) scored.push(scoreTool(tool, await db.outcomesForTool(id), scoringOpts));
+  for (const id of ratedIds) {
+    const tool = toolsMap.get(id);
+    if (tool) scored.push(scoreTool(tool, outcomesByTool.get(id) ?? [], scoringOpts));
   }
   scored.sort((a, b) => b.rank_score - a.rank_score);
   return scored.slice(0, limit);
@@ -161,23 +166,26 @@ export async function getDirectory(
   const pages = Math.max(1, Math.ceil(total / perPage));
   const page = Math.min(Math.max(params.page ?? 1, 1), pages);
   const rows = await db.searchTools({ ...params, limit: perPage, offset: (page - 1) * perPage });
-  // Only pull the reputation map if this page actually has rated tools to score.
-  const scoringOpts: Partial<ScoringOptions> = rows.some((t) => t.n_outcomes > 0)
+  // One reputation query + one outcomes query for the whole page's rated tools.
+  const ratedOnPage = rows.filter((t) => t.n_outcomes > 0).map((t) => t.tool_id);
+  const scoringOpts: Partial<ScoringOptions> = ratedOnPage.length
     ? { reputation: await db.reporterReputation(), ...scoring }
     : scoring;
-  const entries: DirectoryEntry[] = [];
-  for (const t of rows) {
-    entries.push({
-      tool_id: t.tool_id,
-      name: t.name,
-      category: t.category,
-      description: t.description,
-      homepage: t.homepage,
-      n_outcomes: t.n_outcomes,
-      score:
-        t.n_outcomes > 0 ? scoreTool(t, await db.outcomesForTool(t.tool_id), scoringOpts) : undefined,
-    });
-  }
+  const outcomesByTool = ratedOnPage.length
+    ? await db.outcomesForToolsMap(ratedOnPage)
+    : new Map();
+  const entries: DirectoryEntry[] = rows.map((t) => ({
+    tool_id: t.tool_id,
+    name: t.name,
+    category: t.category,
+    description: t.description,
+    homepage: t.homepage,
+    n_outcomes: t.n_outcomes,
+    score:
+      t.n_outcomes > 0
+        ? scoreTool(t, outcomesByTool.get(t.tool_id) ?? [], scoringOpts)
+        : undefined,
+  }));
   return { entries, total, page, pages, per_page: perPage };
 }
 
@@ -187,26 +195,23 @@ export async function getFeed(
   category?: string,
 ): Promise<FeedItem[]> {
   const outcomes = await db.recentOutcomes(limit, category);
-  const items: FeedItem[] = [];
-  for (const o of outcomes) {
-    const tool = await db.getTool(o.tool_id);
-    const reporter = await db.getReporter(o.reporter_id);
-    items.push({
-      outcome_id: o.outcome_id,
-      tool_id: o.tool_id,
-      tool_name: tool?.name ?? o.tool_id,
-      category: o.category,
-      reporter_id: o.reporter_id,
-      reporter_label: reporter?.label ?? null,
-      verified: o.verified,
-      status: o.status,
-      stars: starsForOutcome(o),
-      blurb: blurbForOutcome(o),
-      latency_ms: o.latency_ms,
-      ts: o.ts,
-    });
-  }
-  return items;
+  // Batch-fetch the tools and reporters referenced by this page of outcomes.
+  const toolsMap = await db.getToolsMap([...new Set(outcomes.map((o) => o.tool_id))]);
+  const reportersMap = await db.getReportersMap([...new Set(outcomes.map((o) => o.reporter_id))]);
+  return outcomes.map((o) => ({
+    outcome_id: o.outcome_id,
+    tool_id: o.tool_id,
+    tool_name: toolsMap.get(o.tool_id)?.name ?? o.tool_id,
+    category: o.category,
+    reporter_id: o.reporter_id,
+    reporter_label: reportersMap.get(o.reporter_id)?.label ?? null,
+    verified: o.verified,
+    status: o.status,
+    stars: starsForOutcome(o),
+    blurb: blurbForOutcome(o),
+    latency_ms: o.latency_ms,
+    ts: o.ts,
+  }));
 }
 
 /**
