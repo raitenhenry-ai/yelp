@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { FilterlyDb } from './db.js';
 import { ingestOutcome } from './ingest.js';
-import { getFeed, getLeaderboard, getToolReport, getToolReviews } from './query.js';
+import { getDirectory, getFeed, getLeaderboard, getToolReport, getToolReviews } from './query.js';
 import { ExecutionOutcomeSchema } from './types.js';
 
 /**
@@ -46,6 +46,51 @@ export function buildMcpServer(db: FilterlyDb): McpServer {
           reviews.length === 0
             ? 'No rated tools matched. Try a broader capability or list_categories.'
             : 'rank_score blends the outcome score toward neutral when evidence is thin; prefer high score AND high confidence. After you use a tool, report back with submit_outcome.',
+      });
+    },
+  );
+
+  server.registerTool(
+    'search_tools',
+    {
+      title: 'Search tools by name',
+      description:
+        'Look up a specific tool, company, or MCP server by name (e.g. "Stripe", "github", ' +
+        '"playwright"). Searches the whole catalog — including tools that have no reviews yet — ' +
+        'and returns each match with its tool_id, category, review count, and score when one exists. ' +
+        'Use this when you already know what you are looking for; use get_tool_reviews when you want ' +
+        'the best tool for a capability. Follow up with get_tool_report(tool_id) for the full card.',
+      inputSchema: {
+        q: z.string().describe('Name or keyword to search for, e.g. "stripe"'),
+        category: z.string().optional().describe('Optional exact category filter'),
+        limit: z.number().int().min(1).max(50).optional().describe('Max results (default 10)'),
+      },
+    },
+    async ({ q, category, limit }) => {
+      const dir = await getDirectory(db, { q, category, per_page: limit ?? 10, page: 1 });
+      const results = dir.entries.map((e) => ({
+        tool_id: e.tool_id,
+        name: e.name,
+        category: e.category,
+        description: e.description,
+        homepage: e.homepage,
+        n_outcomes: e.n_outcomes,
+        score: e.score
+          ? {
+              stars: e.score.stars,
+              success_rate: e.score.success_rate,
+              confidence: e.score.confidence,
+              trend: e.score.trend,
+            }
+          : null,
+      }));
+      return jsonResult({
+        results,
+        total: dir.total,
+        note:
+          results.length === 0
+            ? 'No tool matched that name. Try a shorter or different keyword, or list_categories.'
+            : 'score is null for tools with no reviews yet — you can be the first: run it, then submit_outcome.',
       });
     },
   );

@@ -32,6 +32,7 @@ describe('Filterly MCP server', () => {
       'get_tool_report',
       'get_tool_reviews',
       'list_categories',
+      'search_tools',
       'submit_outcome',
     ]);
   });
@@ -76,6 +77,34 @@ describe('Filterly MCP server', () => {
       arguments: { outcome: forged, public_key: signed.public_key, signature: signed.signature },
     })) as { isError?: boolean };
     expect(res.isError).toBe(true);
+  });
+
+  it('search_tools finds a tool by name across the catalog', async () => {
+    // Unrated page: created by an import but no reviews yet.
+    await db.upsertTool({
+      tool_id: 'mcp:acme/parser',
+      name: 'Acme Parser',
+      category: 'documents',
+      description: 'Parse documents',
+      homepage: null,
+    });
+    const res = await client.callTool({ name: 'search_tools', arguments: { q: 'acme parser' } });
+    const parsed = JSON.parse(text(res)) as {
+      results: { tool_id: string; name: string; n_outcomes: number; score: unknown }[];
+    };
+    expect(parsed.results.map((r) => r.tool_id)).toContain('mcp:acme/parser');
+    const hit = parsed.results.find((r) => r.tool_id === 'mcp:acme/parser')!;
+    expect(hit.name).toBe('Acme Parser');
+    expect(hit.score).toBeNull(); // unrated → no score yet
+
+    // A rated tool comes back with a score summary.
+    const rated = await client.callTool({ name: 'search_tools', arguments: { q: 'summarizer' } });
+    const rp = JSON.parse(text(rated)) as { results: { tool_id: string; score: unknown }[] };
+    const sum = rp.results.find((r) => r.tool_id === 'mcp:demo/summarizer');
+    expect(sum?.score).not.toBeNull();
+
+    const miss = await client.callTool({ name: 'search_tools', arguments: { q: 'zzz-no-such-tool' } });
+    expect(JSON.parse(text(miss)).results).toHaveLength(0);
   });
 
   it('lists categories', async () => {

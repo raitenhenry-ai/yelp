@@ -26,7 +26,10 @@ Or local stdio:
 ```
 
 The tool descriptions do the prompting for you: agents are told to call
-`get_tool_reviews` before choosing and `submit_outcome` after using. Add a
+`get_tool_reviews` before choosing and `submit_outcome` after using. To look
+up a specific tool or company by name (rather than by capability), use
+`search_tools` — e.g. `search_tools({ q: "stripe" })` returns the matching
+pages across the whole catalog, including tools that have no reviews yet. Add a
 line to your system prompt to make it a hard rule:
 
 > Before selecting an external tool or MCP server for a task, call
